@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.linear_model import Lasso
+
+from FISTA import fista_lasso
 
 
 class LassoResidualSolver:
@@ -18,14 +19,12 @@ class LassoResidualSolver:
 
         ||Ax_lambda-y||_2 ~= delta.
 
-    Important:
-    sklearn.linear_model.Lasso solves
+    The inner LASSO problem is solved by the self-implemented FISTA
+    algorithm in FISTA.py, which minimizes
 
-        1/(2m) ||Ax-y||_2^2 + alpha ||x||_1,
+        1/2 ||Ax-y||_2^2 + lambda ||x||_1
 
-    where m = number of rows of A. Therefore
-
-        alpha = lambda / m.
+    directly (no sklearn / external convex solver).
     """
 
     def __init__(
@@ -35,8 +34,8 @@ class LassoResidualSolver:
         delta,
         n_grid=100,
         lambda_ratio=1e-6,
-        max_iter=10000,
-        tol=1e-8,
+        max_iter=500,
+        tol=1e-5,
         interpolation_tol=1e-6,
         max_refine=50,
         verbose=True,
@@ -84,9 +83,6 @@ class LassoResidualSolver:
         self.interpolation_tol = float(interpolation_tol)
         self.max_refine = int(max_refine)
         self.verbose = bool(verbose)
-
-        # sklearn 的 alpha = lambda / m
-        self.n_samples = self.m
 
         # lambda_max = ||A^T y||_infinity.
         # For lambda >= lambda_max, x=0 is a Lasso minimizer.
@@ -161,29 +157,15 @@ class LassoResidualSolver:
             )
             return x, residual
 
-        # sklearn:
-        # 1/(2m)||Ax-y||^2 + alpha ||x||_1
-        #
-        # Desired:
-        # 1/2 ||Ax-y||^2 + lambda ||x||_1
-        #
-        # Hence alpha = lambda / m.
-        alpha = lam / self.n_samples
-
-        model = Lasso(
-            alpha=alpha,
-            fit_intercept=False,
+        # 自研 FISTA 求解：
+        #   min_x 1/2 ||Ax-y||_2^2 + lambda ||x||_1
+        x, residual, _, _ = fista_lasso(
+            self.A,
+            self.y,
+            lam,
             max_iter=self.max_iter,
             tol=self.tol,
-            selection="cyclic",
-        )
-
-        model.fit(self.A, self.y)
-
-        x = model.coef_
-
-        residual = np.linalg.norm(
-            self.A @ x - self.y
+            objective_tol=1e-8,
         )
 
         return x, residual
@@ -837,9 +819,9 @@ if __name__ == "__main__":
         # lambda_min / lambda_max.
         lambda_ratio=1e-6,
 
-        # Lasso solver parameters.
-        max_iter=20000,
-        tol=1e-10,
+        # FISTA solver parameters.
+        max_iter=500,
+        tol=1e-5,
 
         # Desired residual accuracy.
         interpolation_tol=1e-6,

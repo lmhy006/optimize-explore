@@ -1,0 +1,226 @@
+\documentclass[UTF8]{ctexart}
+
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathrsfs}
+\usepackage{tikz}
+\usepackage{tikz-cd}
+\usepackage{pgfplots}
+\usepackage{xltabular}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{extarrows}
+\geometry{a4paper, margin=2cm}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{shapes.geometric, positioning, calc, decorations.pathreplacing, 3d}
+
+\newtheorem{theorem}{定理}[subsection]
+\newtheorem{proposition}[theorem]{命题}
+\newtheorem{corollary}[theorem]{推论}
+\newtheorem{lemma}[theorem]{引理}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{定义}
+\newtheoremstyle{examplestyle}{3pt}{3pt}{\itshape}{0pt}{\bfseries}{.}{.5em}{\thmnumber{例 \arabic{example}}\thmnote{\ (#3)}}
+\theoremstyle{examplestyle}
+\newtheorem{example}{}[subsection]
+\theoremstyle{remark}
+\newtheorem*{remark}{注}
+
+\title{L1凸松弛压缩感知信号恢复}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+% 待第 1 章摘要、第 2 章引言加入后，删除下一行，使本节自动编号为第 3 章。
+\setcounter{section}{2}
+
+\section{问题建模与凸优化理论基础}
+本章研究带噪声稀疏信号恢复问题，依次建立信号观测模型、L0 稀疏恢复的 L1 凸松弛模型，推导其 KKT 条件，并给出对偶问题与强对偶性结论。
+
+\subsection{信号观测模型}
+\label{sec:observation}
+
+研究问题为带噪声稀疏信号恢复。设原始信号 $x_{\mathrm{true}}\in\mathbb{R}^n$ 是 $K$-稀疏信号（即至多 $K$ 个非零分量），通过高斯随机测量矩阵 $A\in\mathbb{R}^{M\times n}$ 得到观测向量 $y\in\mathbb{R}^M$，观测过程受到高斯噪声 $e\sim\mathcal{N}(0,\sigma^2 I_M)$ 污染：
+\begin{equation}
+\label{eq:observation}
+y = A x_{\mathrm{true}} + e, \qquad e\sim\mathcal{N}(0,\sigma^2 I_M).
+\end{equation}
+各符号含义见表~\ref{tab:notation}。
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{ll}
+\hline
+符号 & 含义 \\
+\hline
+$x_{\mathrm{true}}\in\mathbb{R}^n$ & $K$-稀疏原始信号 \\
+$A\in\mathbb{R}^{M\times n}$ & 高斯随机测量矩阵，$M<n$ \\
+$e\in\mathbb{R}^M$ & 高斯观测噪声，$e\sim\mathcal{N}(0,\sigma^2I_M)$ \\
+$y\in\mathbb{R}^M$ & 观测向量 \\
+$K$ & 原始信号稀疏度 \\
+$M$ & 观测维度 \\
+\hline
+\end{tabular}
+\caption{符号说明}
+\label{tab:notation}
+\end{table}
+
+\subsection{L0 稀疏恢复与 L1 凸松弛}
+\label{sec:relaxation}
+
+\paragraph*{无噪声 L0 恢复模型}
+在无噪声情形下，稀疏恢复问题可写为如下 L0 范数极小化问题：
+\begin{equation}
+\label{eq:L0}
+\min_{x\in\mathbb{R}^n}\ \|x\|_0 \qquad \text{s.t.} \quad Ax=y,
+\end{equation}
+其中 $\|x\|_0$ 表示向量 $x$ 中非零分量的个数。
+
+\paragraph*{带噪声约束 L0 恢复模型}
+现实观测必然含有噪声，等式约束 $Ax=y$ 无法严格满足，因此将其替换为残差约束 $\|Ax-y\|_2\le\delta$，得到带噪声约束的 L0 模型：
+\begin{equation}
+\label{eq:L0noisy}
+\min_{x\in\mathbb{R}^n}\ \|x\|_0 \qquad \text{s.t.} \quad \|Ax-y\|_2\le\delta.
+\end{equation}
+然而，L0 范数非凸、不连续，对应的组合优化问题难以大规模精确求解，因此考虑将 L0 范数凸松弛为 L1 范数。
+
+\paragraph*{L1 凸松弛问题}
+将 \eqref{eq:L0noisy} 中的 $\|x\|_0$ 替换为 $\|x\|_1$，得到核心优化问题
+\begin{equation}
+\label{eq:P}
+(P)\qquad \min_{x\in\mathbb{R}^n}\ \|x\|_1 \qquad \text{s.t.} \quad \|Ax-y\|_2\le\delta.
+\end{equation}
+
+\paragraph*{凸性论证}
+问题 \eqref{eq:P} 中，目标函数 $\|x\|_1$ 是凸函数；约束函数 $\|Ax-y\|_2$ 是凸函数，因此可行域
+\[
+\{x\in\mathbb{R}^n : \|Ax-y\|_2\le\delta\}
+\]
+是凸集。于是问题 \eqref{eq:P} 是一个凸优化问题，其局部最优解等价于全局最优解。
+
+\paragraph*{噪声阈值 $\delta$ 的选取}
+对于观测模型 \eqref{eq:observation}，残差向量
+\[
+r=Ax-y=A(x-x_{\mathrm{true}})-e.
+\]
+当 $x=x_{\mathrm{true}}$ 时，真实残差满足
+\[
+r_{\mathrm{true}}=-e\sim\mathcal{N}(0,\sigma^2 I_M).
+\]
+标准化得 $\frac{1}{\sigma}r_{\mathrm{true}}\sim\mathcal{N}(0,I_M)$，于是
+\begin{equation}
+\label{eq:chi2}
+Z=\frac{1}{\sigma^2}\|r_{\mathrm{true}}\|_2^2=\frac{1}{\sigma^2}\|e\|_2^2\sim\chi^2(M).
+\end{equation}
+由卡方分布的高概率上界，可取
+\begin{equation}
+\label{eq:delta}
+\delta=\sigma\sqrt{M+2\sqrt{2M}}.
+\end{equation}
+$\delta$ 的取值影响可行域大小：取得过小可能导致可行域为空，取得过大会使约束过于松弛，解过度稀疏、失真严重。
+
+\subsection{KKT 条件推导}
+\label{sec:kkt}
+
+对于凸优化问题 \eqref{eq:P}，构造拉格朗日函数
+\begin{equation}
+\label{eq:Lagrangian}
+L(x,\lambda)=\|x\|_1+\lambda\bigl(\|Ax-y\|_2-\delta\bigr), \qquad \lambda\ge0.
+\end{equation}
+
+由于 $\|x\|_1$ 在原点不可微，稳定性条件中的梯度应替换为次梯度。$\|x\|_1$ 的次微分为
+\begin{equation}
+\label{eq:subdiff}
+\partial\|x\|_1=\bigl\{s\in\mathbb{R}^n : s_i\in\partial|x_i|,\ i=1,\dots,n\bigr\},
+\end{equation}
+其中
+\begin{equation}
+\label{eq:subdiff_component}
+\partial|x_i|=
+\begin{cases}
+\{1\}, & x_i>0,\\
+\{-1\}, & x_i<0,\\
+[-1,1], & x_i=0.
+\end{cases}
+\end{equation}
+当 $\|Ax-y\|_2\neq0$ 时，$\|Ax-y\|_2$ 可微，其次梯度即梯度
+\begin{equation}
+\label{eq:gradnorm}
+\partial_x\|Ax-y\|_2=\frac{A^T(Ax-y)}{\|Ax-y\|_2}.
+\end{equation}
+
+因此，若 $x^*$ 是问题 \eqref{eq:P} 的最优解，则存在乘子 $\lambda^*\ge0$，使得如下 KKT 条件成立：
+\begin{enumerate}
+\item \textbf{稳定性条件（次梯度最优性）}：
+\begin{equation}
+\label{eq:kkt-stationarity}
+-\lambda^*\frac{A^T(Ax^*-y)}{\|Ax^*-y\|_2}\in\partial\|x^*\|_1.
+\end{equation}
+\item \textbf{原问题可行}：
+\[
+\|Ax^*-y\|_2\le\delta.
+\]
+\item \textbf{对偶可行}：
+\[
+\lambda^*\ge0.
+\]
+\item \textbf{互补松弛}：
+\begin{equation}
+\label{eq:kkt-complementarity}
+\lambda^*\bigl(\|Ax^*-y\|_2-\delta\bigr)=0.
+\end{equation}
+\end{enumerate}
+
+互补松弛条件说明：若 $\lambda^*>0$，则必有 $\|Ax^*-y\|_2=\delta$，即最优解位于约束边界上，约束被激活；若 $\lambda^*=0$，则约束不起作用，问题退化为无约束极小化 $\|x\|_1$。在 Slater 条件成立时（见第~\ref{sec:dual} 节），上述 KKT 条件也是全局最优的充分条件。
+
+\subsection{对偶问题与强对偶性}
+\label{sec:dual}
+
+\paragraph*{对偶函数推导}
+由拉格朗日函数 \eqref{eq:Lagrangian}，定义对偶函数
+\begin{equation}
+\label{eq:dual-function}
+g(\lambda)=\inf_{x\in\mathbb{R}^n}L(x,\lambda)
+=-\lambda\delta+\inf_{x\in\mathbb{R}^n}\Bigl(\|x\|_1+\lambda\|Ax-y\|_2\Bigr), \qquad \lambda\ge0.
+\end{equation}
+利用范数的共轭表示 $\|z\|_2=\sup_{\|u\|_2\le1}u^Tz$，并交换 $\inf$ 与 $\sup$（由 Slater 条件保证其合理性），可得
+\begin{equation}
+\label{eq:dual-inf}
+\inf_{x\in\mathbb{R}^n}\Bigl(\|x\|_1+\lambda\|Ax-y\|_2\Bigr)
+=\sup_{\|u\|_2\le1}\Bigl(-\lambda u^Ty+\inf_{x\in\mathbb{R}^n}\bigl(\|x\|_1+\lambda(A^Tu)^Tx\bigr)\Bigr).
+\end{equation}
+由于
+\[
+\inf_{x\in\mathbb{R}^n}\bigl(\|x\|_1+z^Tx\bigr)=
+\begin{cases}
+0, & \|z\|_\infty\le1,\\
+-\infty, & \text{否则},
+\end{cases}
+\]
+令 $v=\lambda u$，则
+\begin{equation}
+\label{eq:dual-g}
+g(\lambda)=-\lambda\delta+\sup_{\|v\|_2\le\lambda,\ \|A^Tv\|_\infty\le1}\bigl(-v^Ty\bigr).
+\end{equation}
+于是拉格朗日对偶问题为
+\begin{equation}
+\label{eq:dual-max}
+\max_{\lambda\ge0}\ g(\lambda)
+=\max_{\lambda\ge0,\ \|v\|_2\le\lambda,\ \|A^Tv\|_\infty\le1}\Bigl(-\delta\lambda-v^Ty\Bigr).
+\end{equation}
+对固定的 $v$，由于 $\delta>0$，最优的 $\lambda$ 取 $\lambda=\|v\|_2$，故 \eqref{eq:dual-max} 等价于
+\begin{equation}
+\label{eq:dual-min}
+\min_{v\in\mathbb{R}^M}\ y^Tv+\delta\|v\|_2 \qquad \text{s.t.} \quad \|A^Tv\|_\infty\le1.
+\end{equation}
+记 \eqref{eq:dual-min} 的最优值为 $q^*$，拉格朗日对偶问题 \eqref{eq:dual-max} 的最优值为 $d^*$，则有 $d^*=-q^*$；强对偶成立时，原问题最优值 $p^*$ 满足 $p^*=d^*=-q^*$。
+
+\paragraph*{Slater 条件验证}
+约束函数 $\|Ax-y\|_2$ 是凸函数。当 $\delta>0$ 且 $A$ 行满秩时（高斯随机矩阵以概率 $1$ 行满秩），方程 $Ax=y$ 有解，因此存在严格可行点 $x$ 满足 $\|Ax-y\|_2=0<\delta$，Slater 条件成立。当 $\delta=0$（即无噪声情形）时，可行域退化为仿射集 $\{x:Ax=y\}$，强对偶性仍可由线性约束凸优化理论保证，也可视为 $\delta\downarrow0$ 的极限情形。
+
+\paragraph*{强对偶结论}
+综上，问题 \eqref{eq:P} 满足约束规格，强对偶成立，原问题与对偶问题之间存在确定的最优值对应关系；这一性质为后续设计自研求解器与验证最优性提供了理论基础。
+
+\end{document}

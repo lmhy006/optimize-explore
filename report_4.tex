@@ -1,0 +1,34 @@
+\documentclass[UTF8]{ctexart}
+
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathrsfs}
+\usepackage{ctex}
+\usepackage{tikz}
+\usepackage{tikz-cd}
+\usepackage{pgfplots}
+\usepackage{xltabular}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{extarrows}
+\geometry{a4paper, margin=2cm}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{shapes.geometric, positioning, calc, decorations.pathreplacing,3d ,positioning}
+
+\newtheorem{theorem}{定理}[subsection]
+\newtheorem{proposition}[theorem]{命题}
+\newtheorem{corollary}[theorem]{推论}
+\newtheorem{lemma}[theorem]{引理}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{定义}
+\newtheoremstyle{examplestyle}{3pt}{3pt}{\itshape}{0pt}{\bfseries}{.}{.5em}{\thmnumber{例 \arabic{example}}\thmnote{\ (#3)}}
+\theoremstyle{examplestyle}
+\newtheorem{example}{}[subsection]
+\theoremstyle{remark}
+\newtheorem*{remark}{注}
+
+\begin{document}
+%###——————————————4.1——————————————————###
+原问题等价于存在参数$\lambda>0$, 使得lasso问题
+\[min\quad \frac{1}{2}\|Ax-y\|_2^2+\lambda\|x\|_1\]
+的最优解同时满足残差约束$\|Ax_\lambda-y\|_2=\delta$, 残差函数$r(\lambda)$不严格单调, 欠定条件下朴素二分法失效, 构造$\lambda$几何递减序列($[10^{-6}\|A^Ty\|_\infty,\|A^Ty\|_\infty]$), 对每个$\lambda$求解lasso的残差曲线, 利用插值寻找$r(\lambda)=\delta$的目标$\lambda$.
+\end{document}

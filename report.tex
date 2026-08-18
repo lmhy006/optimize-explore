@@ -223,4 +223,184 @@ g(\lambda)=-\lambda\delta+\sup_{\|v\|_2\le\lambda,\ \|A^Tv\|_\infty\le1}\bigl(-v
 \paragraph*{强对偶结论}
 综上，问题 \eqref{eq:P} 满足约束规格，强对偶成立，原问题与对偶问题之间存在确定的最优值对应关系；这一性质为后续设计自研求解器与验证最优性提供了理论基础。
 
+\section{自研求解器：加速近端梯度算法（FISTA）}
+本章针对约束问题 \eqref{eq:P}，给出其等价 LASSO 形式与 $\lambda$ 寻根策略，推导近端算子与软阈值公式，并建立 ISTA/FISTA 迭代算法及收敛性分析。
+
+\subsection{约束问题等价转化与 $\lambda$ 寻根策略}
+\label{sec:lambda-root}
+
+原约束问题 \eqref{eq:P} 可等价地表述为：存在参数 $\lambda>0$，使得 LASSO 问题
+\begin{equation}
+\label{eq:lasso}
+\min_{x\in\mathbb{R}^n}\ \frac{1}{2}\|Ax-y\|_2^2+\lambda\|x\|_1
+\end{equation}
+的最优解 $x_\lambda$ 同时满足残差约束
+\[
+\|Ax_\lambda-y\|_2=\delta.
+\]
+残差函数 $r(\lambda)=\|Ax_\lambda-y\|_2$ 不严格单调，在欠定条件下朴素二分法可能失效。为此，构造 $\lambda$ 的几何递减序列，上限取 $\|A^Ty\|_\infty$，下限取 $10^{-6}\|A^Ty\|_\infty$；对每个 $\lambda$ 求解 LASSO \eqref{eq:lasso}，得到残差曲线 $r(\lambda)$，再利用插值方法寻找满足 $r(\lambda)=\delta$ 的目标 $\lambda$。
+
+\subsection{近端算子理论推导}
+\label{sec:prox}
+
+对于闭凸函数 $f:\mathbb{R}^n\to(-\infty,+\infty]$，给定参数 $\tau>0$，近端算子定义为
+\begin{equation}
+\label{eq:prox-def}
+\operatorname{prox}_{\tau f}(v)=\operatorname*{arg\,min}_{x\in\mathbb{R}^n}\left\{f(x)+\frac{1}{2\tau}\|x-v\|_2^2\right\}.
+\end{equation}
+其含义是在尽量保持 $x$ 接近 $v$ 的同时使 $f(x)$ 尽量小。
+
+对 LASSO 问题 \eqref{eq:lasso}，令
+\[
+g(x)=\frac{1}{2}\|Ax-y\|_2^2,\qquad h(x)=\lambda\|x\|_1,
+\]
+则目标函数为 $g(x)+h(x)$，其中 $g$ 可微、$h$ 不可微但凸。采用“梯度下降处理 $g$、近端算子处理 $h$”的策略。
+
+考虑 $h(x)=\lambda\|x\|_1$，由定义 \eqref{eq:prox-def} 得
+\begin{equation}
+\label{eq:prox-l1}
+\operatorname{prox}_{\tau h}(v)=\operatorname*{arg\,min}_{x\in\mathbb{R}^n}\left\{\tau\lambda\|x\|_1+\frac{1}{2}\|x-v\|_2^2\right\}.
+\end{equation}
+将目标函数写开：
+\[
+\frac{1}{2}\|x-v\|_2^2+\tau\lambda\|x\|_1
+=\sum_{i=1}^n\left[\frac{1}{2}(x_i-v_i)^2+\tau\lambda|x_i|\right].
+\]
+因此 $n$ 维问题可分解为 $n$ 个独立的一维问题。对标量问题
+\[
+\min_{u\in\mathbb{R}}\ \phi(u)=\frac{1}{2}(u-v)^2+\alpha|u|,
+\]
+其中记 $\alpha=\tau\lambda$。由于 $|u|$ 在 $0$ 处不可微，分情况讨论：
+\begin{itemize}
+\item 若 $u>0$，则 $\phi(u)=\frac{1}{2}(u-v)^2+\alpha u$，令 $\phi'(u)=u-v+\alpha=0$，得 $u^*=v-\alpha$，需满足 $v>\alpha$；
+\item 若 $u<0$，则 $\phi(u)=\frac{1}{2}(u-v)^2-\alpha u$，令 $\phi'(u)=u-v-\alpha=0$，得 $u^*=v+\alpha$，需满足 $v<-\alpha$；
+\item 若 $u=0$，由次梯度 $\partial|u|\big|_{u=0}=[-1,1]$，最优性条件 $0\in\partial\phi(0)=-v+\alpha[-1,1]$，即 $-\alpha\le v\le\alpha$。
+\end{itemize}
+综合得分段解
+\begin{equation}
+\label{eq:soft-threshold-scalar}
+u^*=
+\begin{cases}
+v-\alpha, & v>\alpha,\\
+0, & |v|\le\alpha,\\
+v+\alpha, & v<-\alpha.
+\end{cases}
+\end{equation}
+回代 $\alpha=\tau\lambda$ 并写成符号函数形式，即得软阈值算子
+\begin{equation}
+\label{eq:soft-threshold}
+S_{\tau\lambda}(v)=\operatorname{sign}(v)\max\{|v|-\tau\lambda,0\}.
+\end{equation}
+对向量逐元素作用，有
+\begin{equation}
+\label{eq:prox-l1-closed}
+\operatorname{prox}_{\tau\lambda\|\cdot\|_1}(v)=\bigl(S_{\tau\lambda}(v_1),\dots,S_{\tau\lambda}(v_n)\bigr)^T.
+\end{equation}
+
+\subsection{ISTA 与 FISTA 迭代算法}
+\label{sec:ista-fista}
+
+\paragraph*{近端梯度迭代格式}
+对光滑部分 $g$ 在 $x_k$ 处作一阶近似，并加上邻近项以保证数值稳定性：
+\begin{equation}
+\label{eq:ista-update}
+x_{k+1}=\operatorname*{arg\,min}_{x\in\mathbb{R}^n}\left\{g(x_k)+\nabla g(x_k)^T(x-x_k)+\frac{1}{2t}\|x-x_k\|_2^2+h(x)\right\},
+\end{equation}
+其中 $t>0$ 为步长。配方并略去与 $x$ 无关的常数项，可得
+\[
+x_{k+1}=\operatorname{prox}_{th}\bigl(x_k-t\nabla g(x_k)\bigr).
+\]
+对于 $h(x)=\lambda\|x\|_1$，有 $\operatorname{prox}_{th}(v)=S_{t\lambda}(v)$，且 $\nabla g(x)=A^T(Ax-y)$，因此 ISTA 迭代格式为
+\begin{equation}
+\label{eq:ista}
+x_{k+1}=S_{t\lambda}\bigl(x_k-tA^T(Ax_k-y)\bigr).
+\end{equation}
+步长取 $0<t\le1/L$，其中 $L=\|A\|_2^2$ 是 $\nabla g$ 的 Lipschitz 常数，见下文收敛性分析。
+
+\paragraph*{FISTA 加速}
+ISTA 每一步只利用当前点 $x_k$ 的信息，收敛速度较慢。FISTA 引入 Nesterov 外推点 $y_k$ 加速：
+\begin{equation}
+\label{eq:fista-y}
+x_{k+1}=\operatorname{prox}_{th}\bigl(y_k-t\nabla g(y_k)\bigr).
+\end{equation}
+辅助序列 $t_k$ 与外推点更新为
+\begin{equation}
+\label{eq:fista-t}
+t_{k+1}=\frac{1+\sqrt{1+4t_k^2}}{2},
+\end{equation}
+\begin{equation}
+\label{eq:fista-extrap}
+y_{k+1}=x_{k+1}+\frac{t_k-1}{t_{k+1}}(x_{k+1}-x_k).
+\end{equation}
+通常取初值 $t_1=1$、$y_1=x_0$。
+
+\paragraph*{步长选取}
+$g$ 的梯度 Lipschitz 常数为
+\[
+\|\nabla g(x)-\nabla g(z)\|_2=\|A^TA(x-z)\|_2\le\|A^TA\|_2\|x-z\|_2,
+\]
+故 $L=\|A^TA\|_2=\|A\|_2^2$。步长可取 $t=1/L=1/\|A\|_2^2$，其中 $\|A\|_2^2$ 通过计算 $A^TA$ 的最大特征值得到。
+
+\paragraph*{ISTA 收敛性}
+设 $x^*$ 为问题 \eqref{eq:lasso} 的最优解，$F(x)=g(x)+h(x)$。由 $g$ 的 Lipschitz 梯度性质，当 $t\le1/L$ 时，
+\begin{equation}
+\label{eq:descent-lemma}
+g(x)\le g(z)+\nabla g(z)^T(x-z)+\frac{1}{2t}\|x-z\|_2^2.
+\end{equation}
+定义代理函数
+\begin{equation}
+\label{eq:Q}
+Q_t(x,z)=g(z)+\nabla g(z)^T(x-z)+\frac{1}{2t}\|x-z\|_2^2+h(x),
+\end{equation}
+则 $F(x)\le Q_t(x,z)$，且 ISTA 更新 \eqref{eq:ista} 等价于 $x_{k+1}=\arg\min_x Q_t(x,x_k)$。由最优性条件，存在 $s_{k+1}\in\partial h(x_{k+1})$ 使得
+\[
+\nabla g(x_k)+\frac{1}{t}(x_{k+1}-x_k)+s_{k+1}=0.
+\]
+由 $h$ 的凸性可得
+\[
+h(x_{k+1})-h(x)\le-\nabla g(x_k)^T(x_{k+1}-x)-\frac{1}{t}(x_{k+1}-x_k)^T(x_{k+1}-x),
+\]
+由 $g$ 的凸性与 \eqref{eq:descent-lemma} 可得
+\[
+g(x_{k+1})-g(x)\le\nabla g(x_k)^T(x_{k+1}-x)+\frac{1}{2t}\|x_{k+1}-x_k\|_2^2.
+\]
+两式相加并利用恒等式
+\[
+2(a-b)^T(a-c)=\|a-b\|_2^2+\|a-c\|_2^2-\|b-c\|_2^2
+\]
+整理得
+\begin{equation}
+\label{eq:ista-key}
+F(x_{k+1})-F(x)\le\frac{1}{2t}\left(\|x_k-x\|_2^2-\|x_{k+1}-x\|_2^2\right).
+\end{equation}
+令 $x=x^*$ 并对 $k=0,\dots,N-1$ 求和，利用 Telescoping 求和得
+\[
+\sum_{k=0}^{N-1}\bigl(F(x_{k+1})-F^*\bigr)\le\frac{1}{2t}\|x_0-x^*\|_2^2.
+\]
+又因 $F(x_k)$ 单调不增，故
+\[
+F(x_N)-F^*\le\frac{1}{N}\sum_{k=0}^{N-1}\bigl(F(x_{k+1})-F^*\bigr)\le\frac{\|x_0-x^*\|_2^2}{2tN}.
+\]
+因此
+\begin{equation}
+\label{eq:ista-rate}
+F(x_N)-F^*=O\left(\frac{1}{N}\right),
+\end{equation}
+即 ISTA 具有 $O(1/k)$ 收敛率。
+
+\paragraph*{停机准则}
+采用双重停机准则：
+\begin{itemize}
+\item 相对迭代变化：
+\[
+r_x^{(k)}=\frac{\|x_{k+1}-x_k\|_2}{\max(1,\|x_k\|_2)}<10^{-5};
+\]
+\item 相对目标函数变化：
+\[
+r_F^{(k)}=\frac{|F_{k+1}-F_k|}{\max(1,|F_k|)}<10^{-8};
+\]
+\item 当迭代次数达到 $k_{\max}=500$ 时强制停机。
+\end{itemize}
+前两项同时满足时认为算法收敛；若达到最大迭代次数仍未满足，则强制终止并保留当前迭代解。
+
 \end{document}

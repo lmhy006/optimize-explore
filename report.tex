@@ -33,8 +33,36 @@
 
 \maketitle
 
-% 待第 1 章摘要、第 2 章引言加入后，删除下一行，使本节自动编号为第 3 章。
-\setcounter{section}{2}
+% 待第 1 章摘要加入后，删除下一行，使本节自动编号为第 2 章。
+\setcounter{section}{1}
+
+\section{引言}
+\label{sec:intro}
+
+奈奎斯特采样定理指出，要无失真地重建带限信号，采样率不得低于信号最高频率的两倍。然而在许多实际场景中，信号本身具有稀疏性或可压缩性，传统均匀采样方式获取了大量冗余数据，采样与存储成本高昂。压缩感知理论表明，对于稀疏信号，可以通过远低于奈奎斯特率的线性测量以高概率精确恢复，其核心在于利用信号的稀疏结构。
+
+考虑 $K$-稀疏信号 $x\in\mathbb{R}^n$（即至多 $K$ 个非零分量），通过测量矩阵 $A\in\mathbb{R}^{M\times n}$（$M<n$）得到观测 $y=Ax$。理论上最直接的恢复模型是 L0 范数极小化
+\[
+\min_{x\in\mathbb{R}^n}\ \|x\|_0 \qquad \text{s.t.} \quad Ax=y,
+\]
+但该问题是 NP-难的组合优化问题，难以大规模精确求解。L1 凸松弛将 L0 范数替换为 L1 范数，得到凸优化问题，从而能够高效求解，并在一定条件下保证恢复精度。
+
+在现有课程作业或朴素实现中，常见以下几类简化缺陷：
+\begin{itemize}
+\item 直接对正则参数 $\lambda$ 二分搜索，忽略残差函数 $r(\lambda)$ 非单调带来的失效风险；
+\item L2 基线采用迭代梯度投影，收敛缓慢且引入额外数值误差；
+\item 使用固定阈值 $|x_i|>\tau$ 判定支撑集，噪声环境下易漏判、误判；
+\item 使用未加速的 ISTA，收敛速度慢，批量仿真耗时高。
+\end{itemize}
+本项目针对上述问题，设计并实现稳健的约束 L1 恢复方案：自研 FISTA 求解 LASSO，采用 $\lambda$ 几何序列与插值策略匹配残差约束，使用解析伪逆作为 L2 对照基线，并采用 Top-K 集合相等判定支撑集恢复成功率。
+
+本项目的研究目标分为四层：
+\begin{enumerate}
+\item \textbf{理论}：推导约束优化模型的 KKT 条件，理解 L1 凸松弛的可行性与最优性；
+\item \textbf{算法}：自研 FISTA 求解 LASSO，并设计稳健的 $\lambda$ 寻根策略实现约束形式 L1 恢复；
+\item \textbf{实验}：定量分析观测维度 $M$、稀疏度 $K$、噪声强度 $\sigma$ 对重建性能的影响，观测相变现象；
+\item \textbf{对比}：与解析 L2 最小范数基线进行对照，结合 RIP 理论分析仿真结果。
+\end{enumerate}
 
 \section{问题建模与凸优化理论基础}
 本章研究带噪声稀疏信号恢复问题，依次建立信号观测模型、L0 稀疏恢复的 L1 凸松弛模型，推导其 KKT 条件，并给出对偶问题与强对偶性结论。
@@ -402,5 +430,137 @@ r_F^{(k)}=\frac{|F_{k+1}-F_k|}{\max(1,|F_k|)}<10^{-8};
 \item 当迭代次数达到 $k_{\max}=500$ 时强制停机。
 \end{itemize}
 前两项同时满足时认为算法收敛；若达到最大迭代次数仍未满足，则强制终止并保留当前迭代解。
+
+\subsection{L2 基线求解方案}
+\label{sec:l2-baseline}
+
+为了公平对比 L1 凸松弛方法的效果，本节实现一个 L2 最小范数基线求解器。其对比优化模型为
+\begin{equation}
+\label{eq:L2-baseline}
+\min_{x\in\mathbb{R}^n}\ \|x\|_2 \qquad \text{s.t.} \quad \|Ax-y\|_2\le\delta.
+\end{equation}
+该模型不利用稀疏性，仅寻找能量最小的可行解，作为实验中的朴素对照。
+
+\paragraph*{解析伪逆闭式解}
+在欠定情形 $M<n$ 且 $A$ 行满秩时，等式约束 $Ax=y$ 有解，问题 \eqref{eq:L2-baseline} 可退化为求满足 $Ax=y$ 的最小范数解：
+\begin{equation}
+\label{eq:l2-pinv}
+\hat{x}_{L2}=A^T(AA^T)^{-1}y.
+\end{equation}
+该解可通过解析伪逆直接计算，无需迭代优化。相比原始方案中的梯度投影迭代，解析伪逆具有以下优点：
+\begin{itemize}
+\item 闭式求解，计算开销低；
+\item 不引入迭代收敛误差，保证对比公平；
+\item 在仿真噪声水平下，伪逆解通常满足残差约束 $\|A\hat{x}_{L2}-y\|_2\le\delta$。
+\end{itemize}
+
+\paragraph*{可行性讨论}
+当 $A$ 行满秩时，$Ax=y$ 有解，因此 $\hat{x}_{L2}$ 的残差为零，对任意 $\delta\ge0$ 均可行。若因数值或退化情形导致残差超过 $\delta$，理论上可启用投影策略，但本实验场景直接使用解析解，以保证 L2 基线的实现简单且公平。
+
+\section{仿真实验方案设计}
+本章规定批量仿真实验的完整方案，包括参数网格、噪声阈值、评价指标、单次实验流程与数据保存方式，为后续实验运行和结果分析提供统一标准。
+
+\subsection{实验参数汇总}
+\label{sec:params}
+
+固定参数：信号长度 $n=128$。变量网格如表~\ref{tab:params} 所示。
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{ll}
+\hline
+参数 & 取值 \\
+\hline
+观测维度 $M$ & $20,30,40,50,60,70,80,90,100$ \\
+稀疏度 $K$ & $3,5,8,12,16,20$ \\
+噪声标准差 $\sigma$ & $0,0.02,0.05,0.10$ \\
+每组随机试验次数 & $50$ \\
+\hline
+\end{tabular}
+\caption{实验参数网格}
+\label{tab:params}
+\end{table}
+
+每组参数 $(M,K,\sigma)$ 独立重复 $50$ 次随机试验。
+
+\subsection{噪声阈值 $\delta$ 选取规则}
+\label{sec:delta-rule}
+
+由第~\ref{sec:observation} 节的分析，取
+\begin{equation}
+\label{eq:delta-experiment}
+\delta=\sigma\sqrt{M+2\sqrt{2M}}.
+\end{equation}
+该阈值来自卡方分布 $\chi^2(M)$ 的高概率上界，使真实残差以较高概率满足约束。$\delta$ 的取值影响可行域大小：取得过小可能导致可行域为空；取得过大会使约束过于松弛，解过度稀疏、失真严重。特别地，当 $\sigma=0$ 时 $\delta=0$，对应无噪声情形下的精确约束 $Ax=y$。
+
+\subsection{评价指标定义}
+\label{sec:metrics}
+
+\paragraph*{支撑集恢复成功率}
+已知真实稀疏度 $K$。对重建向量 $\hat{x}$，取绝对值最大的前 $K$ 个坐标构成估计支撑集
+\begin{equation}
+\label{eq:estimated-support}
+\hat{S}=\operatorname*{arg\,max}_{|S|=K}\sum_{i\in S}|\hat{x}_i|,
+\end{equation}
+即若
+\[
+|\hat{x}_{i_1}|\ge|\hat{x}_{i_2}|\ge\cdots\ge|\hat{x}_{i_K}|\ge\max_{j\notin\hat{S}}|\hat{x}_j|,
+\]
+则
+\[
+\hat{S}=\{i_1,i_2,\dots,i_K\}.
+\]
+将估计支撑集 $\hat{S}$ 与真实支撑集 $S_{\mathrm{true}}$ 做集合相等判定，单次试验成功当且仅当 $\hat{S}=S_{\mathrm{true}}$。\emph{禁止使用固定阈值} $|\hat{x}_i|>\tau$ 判定支撑集，因为噪声环境下固定阈值会产生漏判和误判。
+
+\paragraph*{相对重建误差}
+相对重建误差定义为
+\begin{equation}
+\label{eq:re}
+RE=\frac{\|\hat{x}-x_{\mathrm{true}}\|_2}{\|x_{\mathrm{true}}\|_2}.
+\end{equation}
+$RE$ 仅作为连续量化指标，不作为支撑集成功判定标准。
+
+\subsection{单次完整实验流程}
+\label{sec:single-run}
+
+对每一组参数 $(M,K,\sigma)$ 和每一次随机试验，按以下步骤执行：
+\begin{enumerate}
+\item 生成 $K$-稀疏原始信号 $x_{\mathrm{true}}\in\mathbb{R}^n$：随机选取 $K$ 个支撑位置，非零分量独立服从标准正态分布；
+\item 生成高斯随机测量矩阵 $A\in\mathbb{R}^{M\times n}$，元素独立服从标准正态分布；
+\item 生成高斯噪声 $e\sim\mathcal{N}(0,\sigma^2I_M)$，构造观测向量
+\[
+y=Ax_{\mathrm{true}}+e;
+\]
+\item 按 \eqref{eq:delta-experiment} 计算 $\delta$，使用第~\ref{sec:lambda-root} 节的 FISTA+LASSO 路径插值方法求解约束 L1 恢复问题 \eqref{eq:P}，得到 $\hat{x}_{L1}$；
+\item 使用第~\ref{sec:l2-baseline} 节的解析伪逆方法求解 L2 基线
+\[
+\hat{x}_{L2}=A^T(AA^T)^{-1}y;
+\]
+\item 分别计算 $\hat{x}_{L1}$、$\hat{x}_{L2}$ 的支撑集恢复结果与相对重建误差 \eqref{eq:re}；
+\item 重复上述过程 $50$ 次，统计支撑集恢复成功率与平均相对重建误差。
+\end{enumerate}
+
+\subsection{统计量与数据保存}
+\label{sec:stats-save}
+
+对每组参数 $(M,K,\sigma)$，统计以下指标：
+\begin{itemize}
+\item 支撑集恢复成功率：$50$ 次试验中 $\hat{S}=S_{\mathrm{true}}$ 的次数占比；
+\item 平均相对重建误差：$50$ 次试验的 $RE$ 均值，L1 与 L2 分别统计。
+\end{itemize}
+将最终统计结果保存为 \texttt{.npy} 文件，避免重复运算。
+
+\subsection{代码实现模块}
+\label{sec:code-modules}
+
+实验代码按以下模块组织：
+\begin{itemize}
+\item \texttt{FISTA.py}：自研 FISTA 求解 LASSO；
+\item \texttt{lasso.py}：基于 FISTA 的 $\lambda$ 几何序列与插值寻根，求解约束 L1 问题；
+\item \texttt{l2\_baseline.py}：L2 基线解析伪逆求解；
+\item \texttt{experiment.py}：参数网格三层循环、$50$ 次随机试验、指标统计与结果保存。
+\end{itemize}
+
+
 
 \end{document}

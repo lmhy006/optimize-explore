@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 from FISTA import fista_lasso
 
@@ -127,13 +126,18 @@ class LassoResidualSolver:
     # Solve one Lasso problem
     # ---------------------------------------------------------
 
-    def solve_lasso(self, lam):
+    def solve_lasso(self, lam, x0=None):
         """
         Solve
 
             min_x 1/2 ||Ax-y||_2^2 + lambda ||x||_1
 
         and return x and ||Ax-y||_2.
+
+        x0 : np.ndarray, optional
+            Initial point for FISTA.  Using the previous lambda's
+            solution as warm start greatly improves speed and accuracy
+            on the lambda path.
         """
         lam = float(lam)
 
@@ -166,6 +170,7 @@ class LassoResidualSolver:
             max_iter=self.max_iter,
             tol=self.tol,
             objective_tol=1e-8,
+            x0=x0,
         )
 
         return x, residual
@@ -210,11 +215,16 @@ class LassoResidualSolver:
             print("Computing Lasso residual curve")
             print("=" * 70)
 
+        x_prev = None
+
         for k, lam in enumerate(self.lambdas):
-            x, r = self.solve_lasso(lam)
+            x, r = self.solve_lasso(lam, x0=x_prev)
 
             solutions.append(x)
             residuals.append(r)
+
+            # Warm start for the next (smaller) lambda.
+            x_prev = x.copy()
 
             if self.verbose:
                 print(
@@ -505,7 +515,7 @@ class LassoResidualSolver:
             # -------------------------------------------------
             # Solve the new Lasso
             # -------------------------------------------------
-            x_new, r_new = self.solve_lasso(lam_new)
+            x_new, r_new = self.solve_lasso(lam_new, x0=best_x)
 
             error = abs(r_new - self.delta)
 
@@ -674,6 +684,20 @@ class LassoResidualSolver:
             )
 
         # -----------------------------------------------------
+        # Special case 3: delta ~= 0 (noiseless / exact constraint).
+        #
+        # For delta = 0, the target residual is r(lambda) = 0.
+        # However, for any lambda > 0 the Lasso solution has a
+        # positive residual, so the lambda-path method can only
+        # approximate the equality-constrained minimal-l1 solution
+        # by taking lambda -> 0+.  Use a much smaller lambda_min in
+        # this case so that the smallest-lambda Lasso solution is
+        # close enough to the exact constraint.
+        # -----------------------------------------------------
+        if self.delta <= 1e-12 * max(1.0, self.zero_residual):
+            self.lambda_min = 1e-12 * self.lambda_max
+
+        # -----------------------------------------------------
         # Initial geometric grid
         # -----------------------------------------------------
         self.generate_lambda_grid()
@@ -693,6 +717,8 @@ class LassoResidualSolver:
     # ---------------------------------------------------------
 
     def plot_residual_curve(self):
+        import matplotlib.pyplot as plt
+
         if self.lambdas is None or self.residuals is None:
             raise RuntimeError(
                 "Please call solve() first."

@@ -20,7 +20,7 @@
 ├── l2_baseline.py         # L2 基线解析伪逆求解
 ├── experiment.py          # 批量仿真入口（支持小规模冒烟测试）
 ├── plot_results.py        # 根据仿真结果生成四类图表
-├── report.tex             # 实验报告 LaTeX 源码
+├── report.pdf             # 实验报告
 ├── experiment_output/     # 仿真结果数据
 │   ├── experiment_results.npy
 │   └── experiment_params.npz

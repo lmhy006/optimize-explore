@@ -2,7 +2,13 @@
 
 \usepackage{amsmath, amssymb, amsthm}
 \usepackage{mathrsfs}
+\usepackage{graphicx}
+\usepackage{float}
 \usepackage{tikz}
+
+% 图按章编号，并显示为“图 6-1”格式。
+\numberwithin{figure}{section}
+\renewcommand{\thefigure}{\thesection-\arabic{figure}}
 \usepackage{tikz-cd}
 \usepackage{pgfplots}
 \usepackage{xltabular}
@@ -12,6 +18,9 @@
 \geometry{a4paper, margin=2cm}
 \pgfplotsset{compat=1.18}
 \usetikzlibrary{shapes.geometric, positioning, calc, decorations.pathreplacing, 3d}
+
+\usepackage[numbers,square]{natbib}
+\newcommand{\scite}[1]{\textsuperscript{\cite{#1}}}
 
 \newtheorem{theorem}{定理}[subsection]
 \newtheorem{proposition}[theorem]{命题}
@@ -29,27 +38,37 @@
 \author{}
 \date{}
 
+\usepackage[hidelinks]{hyperref}
+
 \begin{document}
 
 \maketitle
 
-% 待第 1 章摘要加入后，删除下一行，使本节自动编号为第 2 章。
-\setcounter{section}{1}
+\section{摘要}
+\label{sec:abstract}
+
+压缩感知理论指出，当信号具有稀疏性或可压缩性时，可以通过远低于奈奎斯特率的线性测量以高概率恢复原始信号。最直接的 L0 稀疏恢复问题是 NP-难的组合优化问题，本文引入 L1 凸松弛将其转化为凸优化问题，并围绕带噪声稀疏信号恢复展开研究。
+
+本文不调用任何商用凸优化求解器，自主实现了 FISTA 加速近端梯度算法；针对约束形式 L1 恢复问题，设计了 $\lambda$ 几何递减序列与残差曲线插值策略，稳健匹配残差约束 $\delta$；同时采用解析伪逆作为 L2 最小范数基线，保证对比公平并降低计算开销。
+
+在仿真实验中，本文系统分析了采样维度 $M$、稀疏度 $K$ 与噪声强度 $\sigma$ 对重建性能的影响。结果表明：观测维度存在明显的相变临界值，当 $M$ 超过临界值时支撑集恢复成功率快速趋近 $100\%$；噪声会抬升临界采样规模并降低重建精度；L1 凸松弛恢复效果显著优于 L2 最小范数基线。
+
+\noindent\textbf{关键词：}压缩感知；L1 凸松弛；FISTA；稀疏恢复；相变现象；KKT 条件
 
 \section{引言}
 \label{sec:intro}
 
-奈奎斯特采样定理指出，要无失真地重建带限信号，采样率不得低于信号最高频率的两倍。然而在许多实际场景中，信号本身具有稀疏性或可压缩性，传统均匀采样方式获取了大量冗余数据，采样与存储成本高昂。压缩感知理论表明，对于稀疏信号，可以通过远低于奈奎斯特率的线性测量以高概率精确恢复，其核心在于利用信号的稀疏结构。
+奈奎斯特采样定理指出，要无失真地重建带限信号，采样率不得低于信号最高频率的两倍。然而在许多实际场景中，信号本身具有稀疏性或可压缩性，传统均匀采样方式获取了大量冗余数据，采样与存储成本高昂。压缩感知理论表明，对于稀疏信号，可以通过远低于奈奎斯特率的线性测量以高概率精确恢复，其核心在于利用信号的稀疏结构~\scite{donoho2006}。
 
 考虑 $K$-稀疏信号 $x\in\mathbb{R}^n$（即至多 $K$ 个非零分量），通过测量矩阵 $A\in\mathbb{R}^{M\times n}$（$M<n$）得到观测 $y=Ax$。理论上最直接的恢复模型是 L0 范数极小化
 \[
 \min_{x\in\mathbb{R}^n}\ \|x\|_0 \qquad \text{s.t.} \quad Ax=y,
 \]
-但该问题是 NP-难的组合优化问题，难以大规模精确求解。L1 凸松弛将 L0 范数替换为 L1 范数，得到凸优化问题，从而能够高效求解，并在一定条件下保证恢复精度。
+但该问题是 NP-难的组合优化问题，难以大规模精确求解。L1 凸松弛将 L0 范数替换为 L1 范数，得到凸优化问题，从而能够高效求解，并在一定条件下保证恢复精度~\scite{candes2006stable}。
 
 在现有课程作业或朴素实现中，常见以下几类简化缺陷：
 \begin{itemize}
-\item 直接对正则参数 $\lambda$ 二分搜索，忽略残差函数 $r(\lambda)$ 非单调带来的失效风险；
+\item 直接对正则参数 $\lambda$ 二分搜索，忽略残差函数 $r(\lambda)$ 单调非减但非严格单调、以及离散路径数值误差带来的失效风险；
 \item L2 基线采用迭代梯度投影，收敛缓慢且引入额外数值误差；
 \item 使用固定阈值 $|x_i|>\tau$ 判定支撑集，噪声环境下易漏判、误判；
 \item 使用未加速的 ISTA，收敛速度慢，批量仿真耗时高。
@@ -126,7 +145,7 @@ $M$ & 观测维度 \\
 \[
 \{x\in\mathbb{R}^n : \|Ax-y\|_2\le\delta\}
 \]
-是凸集。于是问题 \eqref{eq:P} 是一个凸优化问题，其局部最优解等价于全局最优解。
+是凸集。于是问题 \eqref{eq:P} 是一个凸优化问题，其局部最优解等价于全局最优解~\scite{boyd2004}。
 
 \paragraph*{噪声阈值 $\delta$ 的选取}
 对于观测模型 \eqref{eq:observation}，残差向量
@@ -266,7 +285,7 @@ g(\lambda)=-\lambda\delta+\sup_{\|v\|_2\le\lambda,\ \|A^Tv\|_\infty\le1}\bigl(-v
 \[
 \|Ax_\lambda-y\|_2=\delta.
 \]
-残差函数 $r(\lambda)=\|Ax_\lambda-y\|_2$ 不严格单调，在欠定条件下朴素二分法可能失效。为此，构造 $\lambda$ 的几何递减序列，上限取 $\|A^Ty\|_\infty$，下限取 $10^{-6}\|A^Ty\|_\infty$；对每个 $\lambda$ 求解 LASSO \eqref{eq:lasso}，得到残差曲线 $r(\lambda)$，再利用插值方法寻找满足 $r(\lambda)=\delta$ 的目标 $\lambda$。
+残差函数 $r(\lambda)=\|Ax_\lambda-y\|_2$ 关于 $\lambda$ 单调非减，但可能存在非严格单调区间；在有限迭代和离散 $\lambda$-path 下，直接求解精确 $\lambda$ 还存在数值误差，因此采用几何路径 + 插值策略：构造 $\lambda$ 的几何递减序列，上限取 $\|A^Ty\|_\infty$，下限取 $10^{-6}\|A^Ty\|_\infty$；对每个 $\lambda$ 求解 LASSO \eqref{eq:lasso}，得到残差曲线 $r(\lambda)$，再利用插值方法寻找满足 $r(\lambda)=\delta$ 的目标 $\lambda$。
 
 \subsection{近端算子理论推导}
 \label{sec:prox}
@@ -360,7 +379,7 @@ t_{k+1}=\frac{1+\sqrt{1+4t_k^2}}{2},
 \label{eq:fista-extrap}
 y_{k+1}=x_{k+1}+\frac{t_k-1}{t_{k+1}}(x_{k+1}-x_k).
 \end{equation}
-通常取初值 $t_1=1$、$y_1=x_0$。
+通常取初值 $t_1=1$、$y_1=x_0$。FISTA 在目标函数值意义下具有 $O(1/k^2)$ 的收敛率~\scite{beck2009}，相比 ISTA 的 $O(1/k)$（见后文ISTA收敛性） 有本质加速。
 
 \paragraph*{步长选取}
 $g$ 的梯度 Lipschitz 常数为
@@ -442,16 +461,16 @@ r_F^{(k)}=\frac{|F_{k+1}-F_k|}{\max(1,|F_k|)}<10^{-8};
 该模型不利用稀疏性，仅寻找能量最小的可行解，作为实验中的朴素对照。
 
 \paragraph*{解析伪逆闭式解}
-在欠定情形 $M<n$ 且 $A$ 行满秩时，等式约束 $Ax=y$ 有解，问题 \eqref{eq:L2-baseline} 可退化为求满足 $Ax=y$ 的最小范数解：
+需要说明的是，问题 \eqref{eq:L2-baseline} 的最优解通常位于可行域边界 $\|Ax-y\|_2=\delta$ 上，并不等于等式约束 $Ax=y$ 下的最小范数解。但在欠定情形 $M<n$ 且 $A$ 行满秩时，$Ax=y$ 有解，此时可取等式约束最小范数解
 \begin{equation}
 \label{eq:l2-pinv}
-\hat{x}_{L2}=A^T(AA^T)^{-1}y.
+\hat{x}_{L2}=A^T(AA^T)^{-1}y
 \end{equation}
-该解可通过解析伪逆直接计算，无需迭代优化。相比原始方案中的梯度投影迭代，解析伪逆具有以下优点：
+作为 L2 基线的简化实现。该解残差为零，恒满足 $\|A\hat{x}_{L2}-y\|_2\le\delta$，因而是 \eqref{eq:L2-baseline} 的一个可行解；虽然它不一定是最优解，但不利用稀疏性、计算简单、对比公平，足以作为朴素对照。相比原始方案中的梯度投影迭代，解析伪逆具有以下优点：
 \begin{itemize}
 \item 闭式求解，计算开销低；
 \item 不引入迭代收敛误差，保证对比公平；
-\item 在仿真噪声水平下，伪逆解通常满足残差约束 $\|A\hat{x}_{L2}-y\|_2\le\delta$。
+\item 在欠定行满秩情形下，伪逆解恒满足残差约束 $\|A\hat{x}_{L2}-y\|_2\le\delta$。
 \end{itemize}
 
 \paragraph*{可行性讨论}
@@ -532,7 +551,7 @@ $RE$ 仅作为连续量化指标，不作为支撑集成功判定标准。
 y=Ax_{\mathrm{true}}+e;
 \]
 \item 按 \eqref{eq:delta-experiment} 计算 $\delta$，使用第~\ref{sec:lambda-root} 节的 FISTA+LASSO 路径插值方法求解约束 L1 恢复问题 \eqref{eq:P}，得到 $\hat{x}_{L1}$；
-\item 使用第~\ref{sec:l2-baseline} 节的解析伪逆方法求解 L2 基线
+\item 使用第~\ref{sec:l2-baseline} 节的解析伪逆最小范数解作为 L2 基线（等式约束近似）
 \[
 \hat{x}_{L2}=A^T(AA^T)^{-1}y;
 \]
@@ -562,5 +581,138 @@ y=Ax_{\mathrm{true}}+e;
 \end{itemize}
 
 
+
+\section{实验结果可视化}
+\label{sec:visualization}
+
+本章展示四类实验结果图表：无噪声相变热力图、支撑恢复成功率随观测维度变化折线图、L1 与 L2 平均相对重建误差对比图，以及单次样例恢复对照图。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{figures/fig1_heatmap_sigma0.png}
+\caption{无噪声情形（$\sigma=0$）下 L1 支撑集恢复成功率热力图}
+\label{fig:heatmap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\textwidth]{figures/fig2_success_vs_M.png}
+\caption{不同稀疏度 $K$ 与噪声强度 $\sigma$ 下，L1 支撑集恢复成功率随观测维度 $M$ 的变化}
+\label{fig:success-vs-M}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{figures/fig3_re_L1_vs_L2.png}
+\caption{固定 $K=8$ 时，L1 与 L2 平均相对重建误差随观测维度 $M$ 的变化对比}
+\label{fig:re-compare}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.96\textwidth]{figures/fig4_sample_recovery.png}
+\caption{单次样例恢复对照（$M=60$，$K=8$，$\sigma=0.02$，$n=128$）}
+\label{fig:sample}
+\end{figure}
+
+\section{结果分析与讨论}
+\label{sec:results}
+
+本章基于第 6 章生成的四类图表，从稀疏恢复相变现象、三参数影响规律、与 RIP 理论下界的对比以及误差来源四个方面对仿真结果进行分析。
+
+\subsection{稀疏恢复相变现象}
+\label{sec:phase-transition}
+
+图 6-1 给出了无噪声情形（$\sigma=0$）下 L1 支撑集恢复成功率随观测维度 $M$ 与稀疏度 $K$ 变化的热力图。图中存在一条明显的相变带：在低 $M$、高 $K$ 区域成功率接近于 $0$，随着 $M$ 增大、$K$ 减小，成功率迅速过渡到接近 $100\%$。例如，当 $K=3$ 时，$M=20$ 的成功率已达 $92\%$，$M\ge30$ 后稳定为 $100\%$；当 $K=8$ 时，$M=30$ 的成功率仅为 $44\%$，$M=40$ 时跃升至 $98\%$，$M\ge50$ 后保持 $100\%$；当 $K=20$ 时，$M=50$ 的成功率仅为 $12\%$，$M=60$ 时为 $64\%$，$M=70$ 后才达到 $100\%$。
+
+若记临界观测维度 $M^*$ 为成功率首次达到 $100\%$ 的最小 $M$，则 $M^*$ 随 $K$ 的增大而单调增大。图 6-2 的折线图进一步表明，固定 $K$ 时成功率随 $M$ 呈明显的 $S$ 型上升；$K$ 越大，整条曲线越向右移动，说明需要更多的观测才能实现可靠恢复。该现象与压缩感知理论中“存在相变临界值”的预期一致。
+
+\subsection{三参数影响规律}
+\label{sec:param-effects}
+
+\paragraph*{稀疏度 $K$ 的影响}
+在相同噪声水平下，$K$ 越大，达到可靠恢复所需的观测维度越高。以 $\sigma=0$ 为例，$K=3$ 在 $M=30$ 时即可达到 $100\%$ 成功率，$K=8$ 需要 $M=40$，而 $K=20$ 需要 $M=70$。这说明信号越稀疏，越容易从少量观测中恢复；稀疏度增加会显著提高恢复难度。
+
+\paragraph*{观测维度 $M$ 的影响}
+随着 $M$ 增大，支撑集恢复成功率总体上升，平均相对重建误差下降。在可恢复区域内，L1 方法的相对重建误差迅速降至接近 $0$（无噪声时可达 $10^{-4}$ 量级以下）；而在欠采样区域，误差较高且恢复不稳定。
+
+\paragraph*{噪声强度 $\sigma$ 的影响}
+噪声会同时降低成功率和重建精度。以 $K=8$、$M=40$ 为例，$\sigma=0,0.02,0.05,0.10$ 时的 L1 成功率分别为 $98\%,80\%,74\%,36\%$。图 6-3 显示，随着 $\sigma$ 增大，L1 误差曲线在中等 $M$ 区域的下降速度变慢，最终误差下限也被抬高；相变临界观测维度整体向右移动。
+
+\subsection{与 RIP 理论下界对比}
+\label{sec:rip-comparison}
+
+RIP 理论给出稀疏恢复的充分条件~\scite{candes2005decoding}
+\begin{equation}
+\label{eq:rip-bound}
+M\ge C K\log\left(\frac{n}{K}\right),
+\end{equation}
+其中 $C$ 为常数。需要强调的是，RIP 条件给出的是恢复的充分条件，且其针对的是测量矩阵满足 RIP 这一事件；而实验中统计的是支撑集恢复成功率 $\Pr(\hat{S}=S_{\mathrm{true}})$，两者并不是同一个随机变量或事件，因此不能直接从实验临界点反推出 RIP 常数 $C$。
+
+不过，可以基于经验恢复阈值对 $C K\log(n/K)$ 进行数量级比较。例如在无噪声热力图中，取成功率首次达到约 $95\%$ 以上的临界观测维度 $M^*$，可观察到 $M^*$ 随 $K$ 增大而增大，且与 $K\log(n/K)$ 大致保持同一数量级：对 $K=5,8,16,20$，$M^*/\left(K\log(n/K)\right)$ 分别约为 $1.85,1.80,1.80,1.89$。这说明实验临界采样规模与 RIP 理论尺度一致，但上述比值不应被解释为对 RIP 常数 $C$ 的估计。
+
+此外，噪声会使所需 $M$ 进一步增大，因此有噪声情形下的临界采样规模会整体右移。
+
+\subsection{误差与性能偏差来源分析}
+\label{sec:error-sources}
+
+仿真结果与理论理想情况存在一定偏差，主要来源包括：
+
+\begin{itemize}
+\item \textbf{随机矩阵的 RIP 性质}：高斯随机矩阵仅以高概率满足 RIP，并非每次随机试验都能保证恢复条件成立，因此个别试验可能失败；
+\item \textbf{观测噪声}：噪声带来不可避免的重建误差，即使支撑集被正确恢复，相对重建误差也存在一个正的下界；
+\item \textbf{数值迭代精度}：FISTA 存在有限迭代次数和收敛阈值，$\lambda$ 路径插值也只能近似满足残差约束 $\|Ax-y\|_2=\delta$，这些都会引入微小数值误差；
+\item \textbf{L1 凸松弛的充分非必要性}：L1 松弛是 L0 问题的凸近似，存在部分信号无法通过 L1 精确恢复，这是方法本身的固有局限；
+\item \textbf{阈值选取}：$\delta$ 取卡方分布的高概率上界，可能略大于真实噪声水平，导致约束偏松、解偏稀疏，也会影响恢复精度。
+\end{itemize}
+
+这些因素共同造成了成功率并非严格 $0/1$ 跳变、而是呈现过渡带的现象，也解释了 L1 与 L2 基线之间的显著性能差异。
+
+\section{结论}
+\label{sec:conclusion}
+
+本文围绕带噪声稀疏信号恢复问题，从理论、算法和实验三个层面完成了对 L1 凸松弛压缩感知恢复方案的系统研究。
+
+在理论层面，本文建立了带噪声稀疏恢复的约束优化模型，推导了 L1 凸松弛问题的 KKT 条件，验证了 Slater 约束规格与强对偶性，为后续算法设计提供了理论基础。
+
+在算法层面，本文未使用现成凸优化求解器，自主实现了 FISTA 加速近端梯度算法；针对约束形式 L1 恢复，设计了 $\lambda$ 几何递减序列与残差曲线插值策略，稳健匹配残差约束 $\delta$；同时采用解析伪逆作为 L2 最小范数基线，保证对比公平并降低计算开销。
+
+在实验层面，本文在 $n=128$ 的参数网格上进行了大规模仿真，分析了观测维度 $M$、稀疏度 $K$ 与噪声强度 $\sigma$ 对恢复性能的影响。结果表明：
+\begin{itemize}
+\item L1 恢复存在明显的相变现象，存在临界观测维度 $M^*$，当 $M$ 超过 $M^*$ 时支撑集恢复成功率快速趋近 $100\%$；
+\item 稀疏度 $K$ 越大，所需观测维度越高；噪声强度 $\sigma$ 越大，相变临界右移，重建误差上升；
+\item 与 L2 最小范数基线相比，L1 方法在支撑集恢复成功率和相对重建误差两个指标上均显著占优，验证了稀疏先验在欠定线性逆问题中的关键作用。
+\end{itemize}
+
+综上，本文从理论推导、自研算法到数值实验，完整验证了 L1 凸松弛结合 FISTA 的稀疏恢复方案的有效性与稳健性。
+
+\begin{thebibliography}{9}
+
+\bibitem{donoho2006}
+D.~L. Donoho.
+Compressed sensing.
+\emph{IEEE Transactions on Information Theory}, 52(4):1289--1306, 2006.
+
+\bibitem{candes2006stable}
+E.~J. Cand\`es, J.~K. Romberg, and T.~Tao.
+Stable signal recovery from incomplete and inaccurate measurements.
+\emph{Communications on Pure and Applied Mathematics}, 59(8):1207--1223, 2006.
+
+\bibitem{boyd2004}
+S.~Boyd and L.~Vandenberghe.
+\emph{Convex Optimization}.
+Cambridge University Press, 2004.
+
+\bibitem{beck2009}
+A.~Beck and M.~Teboulle.
+A fast iterative shrinkage-thresholding algorithm for linear inverse problems.
+\emph{SIAM Journal on Imaging Sciences}, 2(1):183--202, 2009.
+
+\bibitem{candes2005decoding}
+E.~J. Cand\`es and T.~Tao.
+Decoding by linear programming.
+\emph{IEEE Transactions on Information Theory}, 51(12):4203--4215, 2005.
+
+\end{thebibliography}
 
 \end{document}

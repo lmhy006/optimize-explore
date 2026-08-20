@@ -1,0 +1,396 @@
+\documentclass[UTF8]{ctexart}
+
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathrsfs}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{tikz}
+
+% 图按章编号，并显示为“图 6-1”格式。
+\numberwithin{figure}{section}
+\renewcommand{\thefigure}{\thesection-\arabic{figure}}
+\usepackage{tikz-cd}
+\usepackage{pgfplots}
+\usepackage{xltabular}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{extarrows}
+\geometry{a4paper, margin=2cm}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{shapes.geometric, positioning, calc, decorations.pathreplacing, 3d}
+
+\usepackage[numbers,square]{natbib}
+\newcommand{\scite}[1]{\textsuperscript{\cite{#1}}}
+
+\newtheorem{theorem}{定理}[subsection]
+\newtheorem{proposition}[theorem]{命题}
+\newtheorem{corollary}[theorem]{推论}
+\newtheorem{lemma}[theorem]{引理}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{定义}
+\newtheoremstyle{examplestyle}{3pt}{3pt}{\itshape}{0pt}{\bfseries}{.}{.5em}{\thmnumber{例 \arabic{example}}\thmnote{\ (#3)}}
+\theoremstyle{examplestyle}
+\newtheorem{example}{}[subsection]
+\theoremstyle{remark}
+\newtheorem*{remark}{注}
+
+\title{增广拉格朗日惩罚参数$c$的数值敏感性研究}
+\author{}
+\date{}
+
+\usepackage[hidelinks]{hyperref}
+
+\begin{document}
+
+\maketitle
+
+\section{研究背景与核心研究问题}
+\label{sec:intro}
+
+\subsection{增广拉格朗日方法}
+\label{sec:alm-background}
+
+增广拉格朗日方法（Augmented Lagrangian Method, ALM）是求解等式约束优化问题的经典框架。考虑如下等式约束优化问题
+\begin{equation}
+\label{eq:constrained}
+\min_{x\in\mathbb{R}^n}\ f(x) \qquad \text{s.t.} \quad Ax=b,
+\end{equation}
+其中 $f:\mathbb{R}^n\to\mathbb{R}$ 为目标函数，$A\in\mathbb{R}^{m\times n}$ 为约束矩阵，$b\in\mathbb{R}^m$ 为约束右端项。ALM 在拉格朗日函数的基础上引入二次惩罚项，构造增广拉格朗日函数
+\begin{equation}
+\label{eq:alm}
+\mathcal{L}_c(x,\lambda)=f(x)+\lambda^\top(Ax-b)+\frac{c}{2}\|Ax-b\|_2^2,
+\end{equation}
+其中 $c>0$ 为惩罚参数，$\lambda\in\mathbb{R}^m$ 为拉格朗日乘子。ALM 的每次外层迭代先对 $x$ 极小化 $\mathcal{L}_c(x,\lambda_k)$ 得到 $x_{k+1}$，再按乘子更新规则
+\begin{equation}
+\label{eq:multiplier-update}
+\lambda_{k+1}=\lambda_k+c(Ax_{k+1}-b)
+\end{equation}
+更新乘子。该方法兼具拉格朗日法的对偶上升思想与罚函数法的强凸性，在凸优化、约束优化和分布式优化等领域有广泛应用。
+
+\subsection{惩罚参数 $c$ 的关键作用}
+\label{sec:c-role}
+
+在增广拉格朗日函数 \eqref{eq:alm} 中，惩罚参数 $c$ 是调控约束惩罚强度的核心超参数，其取值直接影响算法的外层收敛速度与子问题求解难度：
+
+\begin{itemize}
+\item 当 $c$ 较小时，约束惩罚较弱，乘子更新对约束违反的修正力度有限，外层收敛通常较慢；
+\item 当 $c$ 较大时，约束惩罚增强，外层收敛往往加快，但子问题海森矩阵 $H_c=H+cA^\top A$ 的条件数随之增大，内层求解难度与单轮计算成本上升。
+\end{itemize}
+
+因此，$c$ 的选取本质上是在外层迭代步数与内层求解成本之间进行权衡，理解这一权衡关系对 ALM 的高效实现和参数自适应具有重要意义。
+
+\subsection{现有研究的不足}
+\label{sec:gap}
+
+现有研究多基于经验定性描述 $c$ 的权衡效应，但仍存在以下不足：
+
+\begin{itemize}
+\item 对“精确求解子问题”与“不精确求解子问题”两种场景下的行为差异缺乏系统区分，容易将不精确求解带来的数值现象错误归因于 ALM 本身；
+\item 对最优惩罚参数与内层求解精度、原问题病态性的耦合关系缺少定量验证；
+\item 对计算意义上的最优惩罚参数 $c^*$ 如何随问题条件数 $\kappa(H)$ 与内层精度 $\epsilon_{\mathrm{inner}}$ 漂移，尚未形成系统的实验结论。
+\end{itemize}
+
+这些不足使得实际使用中惩罚参数 $c$ 的选取往往依赖人工试错，缺乏可量化的指导准则。
+
+\subsection{核心研究问题}
+\label{sec:rqs}
+
+针对上述不足，本实验以对称正定二次规划为基准测试问题，系统控制惩罚参数、内层求解精度、原问题条件数三类变量，围绕以下三个核心研究问题（Research Question, RQ）展开：
+
+\begin{enumerate}
+\item \textbf{RQ1：惩罚参数 $c$ 如何影响 ALM 的外层收敛行为？}
+聚焦 $c$ 对原始残差 $\|Ax_k-b\|_2$ 与目标函数误差 $f(x_k)-f^*$ 演化规律的影响，并区分精确子问题求解与不精确子问题求解两种场景下的差异。
+\item \textbf{RQ2：惩罚参数 $c$ 如何影响算法的整体计算效率？}
+结合外层迭代开销与内层求解开销，量化二者的权衡关系，定位计算意义上的最优惩罚参数。
+\item \textbf{RQ3：惩罚参数的最优取值是否依赖于问题条件数与内层求解精度？}
+检验 $c^*=c^*(\kappa(H),\,\epsilon_{\mathrm{inner}})$ 的猜想，即最优惩罚参数是否同时由原问题条件数和内层求解精度决定，这是本实验最具创新性的核心内容。
+\end{enumerate}
+
+
+
+\section{理论基础与研究假设}
+\label{sec:theory}
+
+本章围绕惩罚参数 $c$ 的作用机制，给出精确 ALM 与不精确 ALM 的性质区分、子问题条件数的理论分析、内层迭代计算代价理论，并提出可检验的研究假设。
+
+\subsection{两类 ALM 的性质区分}
+\label{sec:alm-types}
+
+本实验将 ALM 区分为两个层次：
+
+\begin{enumerate}
+\item \textbf{精确 ALM}：子问题求解到极高精度，近似理论意义上的全局最小化。在凸问题假设下，外层迭代具有严格收敛保证，目标函数与残差不会出现结构性震荡，$c$ 仅影响外层收敛速率。
+\item \textbf{不精确 ALM}：子问题仅求解到有限精度（固定迭代步数或固定容差）。此时大 $c$ 会放大内层求解误差、加剧数值条件恶化，进而导致目标值波动、收敛平台抬高，甚至计算效率下降。
+\end{enumerate}
+
+震荡、平台等现象本质上来源于子问题不精确求解、数值条件恶化、浮点误差、终止准则不合理等实际因素，而非 ALM 本身的理论性质。
+
+\subsection{子问题条件数的理论分析}
+\label{sec:condition}
+
+对于二次规划基准问题，子问题的海森矩阵为
+\begin{equation}
+\label{eq:Hc}
+H_c=H+cA^\top A.
+\end{equation}
+若 $H\succ 0$ 且 $A$ 行满秩，则有以下性质：
+
+\begin{itemize}
+\item 最大特征值 $\lambda_{\max}(H_c)$ 随 $c$ 增大单调递增，当 $c\to\infty$ 时近似随 $c$ 线性增长；
+\item 最小特征值 $\lambda_{\min}(H_c)\ge\lambda_{\min}(H)>0$，存在严格正下界；
+\item 条件数 $\kappa(H_c)=\lambda_{\max}(H_c)/\lambda_{\min}(H_c)$ 随 $c$ 增大单调上升，在大 $c$ 区域近似呈线性增长趋势。
+\end{itemize}
+
+该性质说明：增大 $c$ 在加强约束惩罚的同时，会不可避免地恶化子问题的数值条件，从而增加内层求解难度。
+
+\subsection{内层迭代的计算代价理论}
+\label{sec:cg-cost}
+
+采用共轭梯度法（CG）求解子问题线性系统时，经典收敛理论给出达到精度 $\epsilon_{\mathrm{inner}}$ 所需迭代步数的上界：
+\begin{equation}
+\label{eq:cg-bound}
+N_{\mathrm{CG}}\lesssim O\left(\sqrt{\kappa(H_c)}\cdot\log\frac{1}{\epsilon_{\mathrm{inner}}}\right),
+\end{equation}
+即内层迭代步数的上界与子问题条件数的平方根正相关，与求解精度的对数正相关。结合式 \eqref{eq:Hc} 的条件数性质，可以预期 $c$ 增大时单轮内层求解成本上升。
+
+\subsection{正式研究假设}
+\label{sec:hypotheses}
+
+基于上述理论，提出以下可检验的研究假设：
+
+\begin{enumerate}
+\item \textbf{H1}：随着 $c$ 增大，外层迭代中原始残差的收敛速率总体提升；同时子问题条件数单调增大，单轮子问题的求解成本呈上升趋势，二者形成权衡关系。
+\item \textbf{H2}：在不精确 ALM 场景下，总计算代价定义为总内层迭代数/运行时间，如果总成本曲线存在内部最小值，则称其表现为 U 型；若最优点落在扫描边界，则报告为边界最优。
+\item \textbf{H3}：精确 ALM 场景下，外层收敛速度随 $c$ 增大单调提升，不会出现显著的 U 型效率拐点；震荡与收敛平台仅在不精确 ALM 的大 $c$ 区域出现。
+\item \textbf{H4}：最优惩罚参数依赖于内层求解精度；随着内层求解精度变化，计算成本最优区域将发生系统性漂移。
+\item \textbf{H5}：原问题条件数会影响惩罚参数的计算最优区域；随着问题病态性增强，大 $c$ 所带来的内层条件恶化效应预计更加显著。
+\end{enumerate}
+
+上述假设将指导后续实验设计与结果分析。
+
+\section{测试问题构造}
+\label{sec:test-problem}
+
+\begin{remark}
+本章为实验测试问题与参数设置说明，不涉及核心理论推导与算法实现代码；若报告篇幅有限，可作为可选内容整体忽略，不影响后续实验设计与结果分析的主线。
+\end{remark}
+
+\subsection{基准二次规划问题}
+\label{sec:qp-benchmark}
+
+选取对称正定二次规划作为核心测试问题，其优势在于子问题结构显式、条件数可精确计算、最优解可通过 KKT 系统精确求解：
+\begin{equation}
+\label{eq:qp}
+\min_{x\in\mathbb{R}^n}\ \frac{1}{2}x^\top H x-q^\top x \qquad \text{s.t.} \quad Ax=b,
+\end{equation}
+其中 $H\succ 0$ 为对称正定矩阵，$q\in\mathbb{R}^n$，$A\in\mathbb{R}^{m\times n}$，$b\in\mathbb{R}^m$。基础参数设置如下：
+\begin{itemize}
+\item 问题规模：变量维数 $n=100$，约束个数 $m=20$；
+\item $A$：随机稠密矩阵，保证行满秩；
+\item $b$：通过预设最优解 $x^*$ 反算生成，确保可行且最优值、最优乘子已知，用于误差计算。
+\end{itemize}
+
+\subsection{多条件数测试集}
+\label{sec:kappa-set}
+
+构造 4 组不同条件数的 $H$ 矩阵，作为独立实验因素：
+\begin{equation}
+\label{eq:kappa-grid}
+\kappa(H)\in\{10^1,\,10^2,\,10^3,\,10^4\},
+\end{equation}
+用于研究原问题病态性与惩罚参数 $c$ 的耦合效应。
+
+
+\section{实验变量与控制规范}
+\label{sec:control}
+
+\begin{remark}
+本章为实验变量与控制规范说明，用于保证实验可重复性，不涉及理论推导与算法实现代码；若报告聚焦理论与算法主线，可将本章作为可选内容酌情精简或忽略。
+\end{remark}
+
+\subsection{核心实验因素}
+\label{sec:factors}
+
+\begin{enumerate}
+\item \textbf{惩罚参数 $c$}：对数等间距选取 9 个值，覆盖 9 个数量级
+\[
+c\in\{10^{-4},10^{-3},10^{-2},10^{-1},10^{0},10^{1},10^{2},10^{3},10^{4}\}.
+\]
+\item \textbf{内层求解精度 $\epsilon_{\mathrm{inner}}$}：选取 3 个典型精度等级，额外设置高精度组作为精确 ALM 近似
+\[
+\epsilon_{\mathrm{inner}}\in\{10^{-2},10^{-4},10^{-6},10^{-12}\}.
+\]
+\item \textbf{原问题条件数 $\kappa(H)$}：4 个梯度等级
+\[
+\kappa(H)\in\{10^1,10^2,10^3,10^4\}.
+\]
+\end{enumerate}
+
+\subsection{统一控制变量}
+\label{sec:controls}
+
+为保证单一变量原则，所有实验组采用一致的基础设置：
+\begin{itemize}
+\item 初始点：$x_0=\boldsymbol{0}$；
+\item 初始乘子：$\lambda_0=\boldsymbol{0}$；
+\item 外层终止准则：原始残差 $\|r_p\|_2\le10^{-6}$ 且平稳性残差 $\|r_s\|_2\le10^{-6}$，或最大外层迭代 500 步；
+\item 乘子更新规则：$\lambda_{k+1}=\lambda_k+c(Ax_{k+1}-b)$；
+\item 每组参数设置重复 3 次随机实验，取平均值作为统计结果。
+\end{itemize}
+
+\subsection{残差术语规范}
+\label{sec:residuals}
+
+统一采用 ALM 标准残差定义，不使用 ADMM 语境下的“对偶残差”表述：
+\begin{enumerate}
+\item \textbf{原始残差（primal residual）}：$r_p^k=Ax_k-b$，衡量约束违反程度；
+\item \textbf{平稳性残差（stationarity residual）}：$r_s^k=\nabla f(x_k)+A^\top\lambda_k$，衡量一阶平稳性条件满足程度。
+\end{enumerate}
+
+\section{核心实验设计}
+\label{sec:experiments}
+
+\subsection{实验 1：基础 $c$-敏感性分析}
+\label{sec:exp1}
+
+\textbf{实验定位：}基础基准实验，回答 RQ1 的外层收敛规律。
+
+\textbf{固定条件：}基准问题 $\kappa(H)=100$，内层精度设置两组对照（精确组 $\epsilon_{\mathrm{inner}}=10^{-12}$、典型不精确组 $\epsilon_{\mathrm{inner}}=10^{-4}$）。
+
+\textbf{扫描变量：}惩罚参数 $c\in\{10^{-4},10^{-3},\dots,10^{4}\}$。
+
+\textbf{核心观测指标：}
+\begin{itemize}
+\item 逐轮原始残差 $r_p(k)$ 演化；
+\item 逐轮平稳性残差 $r_s(k)$ 演化；
+\item 收敛所需外层迭代次数 $N_{\mathrm{outer}}$。
+\end{itemize}
+
+\textbf{实验内容与分析要点：}
+\begin{enumerate}
+\item 分别在精确 ALM 与不精确 ALM 两种场景下，遍历所有 $c$ 值运行算法，记录完整收敛轨迹；
+\item 绘制不同 $c$ 下的残差收敛曲线（对数坐标），对比外层收敛速率随 $c$ 的变化趋势；
+\item 对比精确与不精确场景的差异：验证精确场景下收敛速度随 $c$ 单调提升，无结构性震荡；不精确场景下大 $c$ 区域出现收敛平台与波动；
+\item 验证假设 H1 与 H3 的外层收敛部分。
+\end{enumerate}
+
+\subsection{实验 2：计算成本权衡与最优 $c$}
+\label{sec:exp2}
+
+\textbf{实验定位：}效率分析实验，回答 RQ2 的计算权衡问题。
+
+\textbf{固定条件：}基准问题 $\kappa(H)=100$，典型不精确场景 $\epsilon_{\mathrm{inner}}=10^{-4}$。
+
+\textbf{扫描变量：}惩罚参数 $c$ 全网格。
+
+\textbf{核心观测指标：}
+\begin{itemize}
+\item 单轮平均内层迭代数 $N_{\mathrm{inner}}$；
+\item 收敛所需外层迭代数 $N_{\mathrm{outer}}$；
+\item 全程累计总内层迭代数 $N_{\mathrm{inner,total}}$；
+\item 总 CPU 运行时间。
+\end{itemize}
+
+\textbf{实验内容与分析要点：}
+\begin{enumerate}
+\item 统计每个 $c$ 对应的外层迭代开销、内层单轮开销、总计算开销；
+\item 绘制“总内层迭代数 vs $c$”与“CPU 时间 vs $c$”曲线，验证是否呈现先降后升的 U 型分布；
+\item 定位计算意义上的最优惩罚参数 $c^*_{\mathrm{computational}}$，即总计算代价最小的 $c$ 取值；
+\item 分解 U 型曲线的成因：左侧由外层收敛过慢主导，右侧由内层条件数恶化主导，验证假设 H2。
+\end{enumerate}
+
+\subsection{实验 3：条件数 $\times$ 内层精度的耦合影响}
+\label{sec:exp3}
+
+\textbf{实验定位：}核心创新实验，回答 RQ3 的最优参数依赖性问题。
+
+\textbf{改变变量：}原问题条件数 $\kappa(H)\in\{10^1,10^2,10^3,10^4\}$、内层求解精度 $\epsilon_{\mathrm{inner}}\in\{10^{-2},10^{-4},10^{-6}\}$。
+
+\textbf{扫描变量：}每组参数组合下遍历全量 $c$。
+
+\textbf{核心问题：}最优惩罚参数是否同时依赖于问题条件数与内层精度，即 $c^*=c^*(\kappa(H),\,\epsilon_{\mathrm{inner}})$？
+
+\textbf{实验内容与分析要点：}
+\begin{enumerate}
+\item 对 $4\times3$ 组参数组合，分别重复实验 2 的完整流程，计算每组对应的最优 $c^*$；
+\item 固定内层精度，对比不同条件数下 $c^*$ 的变化：验证原问题越病态，最优 $c^*$ 越小（假设 H5）；
+\item 固定问题条件数，对比不同内层精度下 $c^*$ 的变化：验证内层精度越松，最优 $c^*$ 越小（假设 H4）；
+\item 绘制二维热力图或多组对比曲线，例如横轴 $\log_{10}\kappa$、纵轴 $\log_{10}\epsilon_{\mathrm{inner}}$、颜色 $\log_{10}c^*$，系统展示 $c^*$ 随两个因素的漂移规律；如果有规律，尝试拟合
+\[
+\log c^*=a+b\log\kappa+d\log\epsilon_{\mathrm{inner}},
+\]
+如果拟合不出线性关系，则说明 $c^*$ 不满足简单幂律关系。
+\end{enumerate}
+
+\subsection{实验 4：固定 $c$ vs 自适应 $c$}
+\label{sec:exp4}
+
+\textbf{实验定位：}延伸应用实验，作为前三部分结论的自然落地。
+
+\textbf{对比对象：}
+\begin{itemize}
+\item 对照组：实验 2 中得到的最优固定 $c_0=c^*_{\mathrm{computational}}$；
+\item 实验组：两种经典自适应 $c$ 策略
+\begin{enumerate}
+\item 固定倍率递增：每 5 轮外层迭代，令 $c_{k+1}=1.5\cdot c_k$；
+\item 残差平衡自适应：若原始残差 $>10$ 倍平稳性残差，则增大 $c$，否则保持不变；增大方式为倍增 $c_{k+1}=\gamma c_k$（$\gamma$ 取 2 或 5），同时设置 $c$ 的最大值和最小值。
+\end{enumerate}
+\end{itemize}
+
+\textbf{核心问题：}自适应调整策略能否在无需预调参的前提下，逼近最优固定 $c$ 的计算效率？
+
+\textbf{实验内容与分析要点：}
+\begin{enumerate}
+\item 在基准问题与多组条件数问题上，分别运行固定最优 $c$ 与自适应策略；
+\item 对比总计算效率、收敛平稳性、最终精度三个维度的表现；
+\item 验证自适应策略的价值：在问题特性未知时，能否自动找到接近最优的惩罚强度，避免手动调参成本。
+\end{enumerate}
+
+\section{观测指标体系汇总}
+\label{sec:metrics}
+
+本章汇总实验所需观测指标，分为收敛轨迹类、计算效率类和数值条件类三类。
+
+\subsection{收敛轨迹类（逐轮记录）}
+\label{sec:metrics-trajectory}
+
+\begin{itemize}
+\item 原始残差 $\|r_p^k\|_2$；
+\item 目标函数相对误差 $|f(x_k)-f^*|/|f^*|$；
+\item 平稳性残差 $\|r_s^k\|_2$；
+\item 乘子相对误差 $\|\lambda_k-\lambda^*\|_2/\|\lambda^*\|_2$。
+\end{itemize}
+
+\subsection{计算效率类（聚合统计）}
+\label{sec:metrics-efficiency}
+
+\begin{itemize}
+\item 收敛所需外层迭代次数；
+\item 单轮平均内层迭代次数；
+\item 全程累计总内层迭代次数；
+\item 总 CPU 运行时间。
+\end{itemize}
+
+\subsection{数值条件类}
+\label{sec:metrics-condition}
+
+\begin{itemize}
+\item 子问题海森矩阵条件数 $\kappa(H_c)$；
+\item 子问题最大/最小特征值；
+\item 内层迭代步数与条件数的相关系数。
+\end{itemize}
+
+\section{结果判定标准}
+\label{sec:verdict}
+
+各研究假设的成立判定以实验数据为准，具体判定规则明确如下：
+
+\begin{enumerate}
+\item \textbf{H1 成立判定}：随 $c$ 增大，达到相同原始残差精度所需的外层迭代数总体下降，即外层收敛速率总体提升；同时单轮平均内层迭代数总体上升。两个趋势同时出现时，认为 H1 成立，即 $c$ 在外层收敛速度与内层求解成本之间形成权衡关系。
+\item \textbf{H2 成立判定}：在不精确 ALM 场景下，考察总计算代价（总内层迭代数或 CPU 时间）随 $c$ 的变化曲线。若曲线存在内部最小值，则表现为 U 型，H2 成立；若最优 $c$ 落在扫描边界，则报告为边界最优，并明确标注该边界情形。
+\item \textbf{H3 成立判定}：在精确 ALM 场景下，外层收敛速度随 $c$ 增大单调提升（或达到相同残差精度所需的外层迭代数单调不增），且无显著震荡与收敛平台；同时，震荡与收敛平台仅在不精确 ALM 的大 $c$ 区域出现。若精确场景出现明显震荡或平台，则 H3 不成立。
+\item \textbf{H4 成立判定}：固定问题条件数，随着内层求解精度变松（$\epsilon_{\mathrm{inner}}$ 增大），最优惩罚参数 $c^*$ 总体向更小方向漂移；若 $c^*$ 随 $\epsilon_{\mathrm{inner}}$ 出现系统性漂移且方向与假设一致，则 H4 成立。
+\item \textbf{H5 成立判定}：固定内层精度，随着原问题条件数 $\kappa(H)$ 增大（问题更病态），最优惩罚参数 $c^*$ 总体向更小方向漂移，且大 $c$ 区域的内层条件恶化效应（如单轮内层迭代数、子问题条件数）增强更显著；若满足上述规律，则 H5 成立。
+\end{enumerate}
+
+\end{document}

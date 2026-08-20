@@ -24,8 +24,6 @@ __pycache__/
 *.snm
 *.vrb
 
-
-*.tex
 *.docx
 
 # 系统/编辑器临时文件

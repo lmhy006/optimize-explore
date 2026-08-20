@@ -50,7 +50,7 @@
 \subsection{增广拉格朗日方法}
 \label{sec:alm-background}
 
-增广拉格朗日方法（Augmented Lagrangian Method, ALM）是求解等式约束优化问题的经典框架。考虑如下等式约束优化问题
+增广拉格朗日方法（Augmented Lagrangian Method, ALM）是求解等式约束优化问题的经典框架\scite{bertsekas1982}。考虑如下等式约束优化问题
 \begin{equation}
 \label{eq:constrained}
 \min_{x\in\mathbb{R}^n}\ f(x) \qquad \text{s.t.} \quad Ax=b,
@@ -138,15 +138,15 @@ H_c=H+cA^\top A.
 \begin{itemize}
 \item 最大特征值 $\lambda_{\max}(H_c)$ 随 $c$ 增大单调递增，当 $c\to\infty$ 时近似随 $c$ 线性增长；
 \item 最小特征值 $\lambda_{\min}(H_c)\ge\lambda_{\min}(H)>0$，存在严格正下界；
-\item 条件数 $\kappa(H_c)=\lambda_{\max}(H_c)/\lambda_{\min}(H_c)$ 随 $c$ 增大单调上升，在大 $c$ 区域近似呈线性增长趋势。
+\item 条件数 $\kappa(H_c)=\lambda_{\max}(H_c)/\lambda_{\min}(H_c)$ 的变化取决于 $H$ 与 $A^\top A$ 的谱结构：由于 $A^\top A\succeq0$，增大 $c$ 会使 $\lambda_{\max}(H_c)$ 与 $\lambda_{\min}(H_c)$ 均单调不减，但二者增长速率一般不同，因此 $\kappa(H_c)$ 并不必然单调上升；在本实验的大 $c$ 区域，$\kappa(H_c)$ 整体呈上升趋势。
 \end{itemize}
 
-该性质说明：增大 $c$ 在加强约束惩罚的同时，会不可避免地恶化子问题的数值条件，从而增加内层求解难度。
+该分析说明：增大 $c$ 在加强约束惩罚的同时，会改变子问题的谱结构，通常（但并非必然）恶化数值条件，从而增加内层求解难度。实际变化需结合 $H$ 与 $A^\top A$ 的谱方向综合判断。
 
 \subsection{内层迭代的计算代价理论}
 \label{sec:cg-cost}
 
-采用共轭梯度法（CG）求解子问题线性系统时，经典收敛理论给出达到精度 $\epsilon_{\mathrm{inner}}$ 所需迭代步数的上界：
+采用共轭梯度法（CG）求解子问题线性系统时，经典收敛理论给出达到精度 $\epsilon_{\mathrm{inner}}$ 所需迭代步数的上界\scite{hestenes1952}：
 \begin{equation}
 \label{eq:cg-bound}
 N_{\mathrm{CG}}\lesssim O\left(\sqrt{\kappa(H_c)}\cdot\log\frac{1}{\epsilon_{\mathrm{inner}}}\right),
@@ -159,7 +159,7 @@ N_{\mathrm{CG}}\lesssim O\left(\sqrt{\kappa(H_c)}\cdot\log\frac{1}{\epsilon_{\ma
 基于上述理论，提出以下可检验的研究假设：
 
 \begin{enumerate}
-\item \textbf{H1}：随着 $c$ 增大，外层迭代中原始残差的收敛速率总体提升；同时子问题条件数单调增大，单轮子问题的求解成本呈上升趋势，二者形成权衡关系。
+\item \textbf{H1}：随着 $c$ 增大，外层迭代中原始残差的收敛速率总体提升；同时子问题条件数总体增大，单轮子问题的求解成本呈上升趋势，二者形成权衡关系。
 \item \textbf{H2}：在不精确 ALM 场景下，总计算代价定义为总内层迭代数/运行时间，如果总成本曲线存在内部最小值，则称其表现为 U 型；若最优点落在扫描边界，则报告为边界最优。
 \item \textbf{H3}：精确 ALM 场景下，外层收敛速度随 $c$ 增大单调提升，不会出现显著的 U 型效率拐点；震荡与收敛平台仅在不精确 ALM 的大 $c$ 区域出现。
 \item \textbf{H4}：最优惩罚参数依赖于内层求解精度；随着内层求解精度变化，计算成本最优区域将发生系统性漂移。
@@ -170,10 +170,6 @@ N_{\mathrm{CG}}\lesssim O\left(\sqrt{\kappa(H_c)}\cdot\log\frac{1}{\epsilon_{\ma
 
 \section{测试问题构造}
 \label{sec:test-problem}
-
-\begin{remark}
-本章为实验测试问题与参数设置说明，不涉及核心理论推导与算法实现代码；若报告篇幅有限，可作为可选内容整体忽略，不影响后续实验设计与结果分析的主线。
-\end{remark}
 
 \subsection{基准二次规划问题}
 \label{sec:qp-benchmark}
@@ -304,7 +300,7 @@ c\in\{10^{-4},10^{-3},10^{-2},10^{-1},10^{0},10^{1},10^{2},10^{3},10^{4}\}.
 
 \textbf{实验定位：}核心创新实验，回答 RQ3 的最优参数依赖性问题。
 
-\textbf{改变变量：}原问题条件数 $\kappa(H)\in\{10^1,10^2,10^3,10^4\}$、内层求解精度 $\epsilon_{\mathrm{inner}}\in\{10^{-2},10^{-4},10^{-6}\}$。
+\textbf{改变变量：}原问题条件数 $\kappa(H)\in\{10^1,10^2,10^3,10^4\}$、内层求解精度 $\epsilon_{\mathrm{inner}}\in\{10^{-2},10^{-4},10^{-6}\}$；额外纳入 $\epsilon_{\mathrm{inner}}=10^{-12}$ 作为 high-accuracy reference，用于近似精确 ALM。
 
 \textbf{扫描变量：}每组参数组合下遍历全量 $c$。
 
@@ -392,5 +388,252 @@ c\in\{10^{-4},10^{-3},10^{-2},10^{-1},10^{0},10^{1},10^{2},10^{3},10^{4}\}.
 \item \textbf{H4 成立判定}：固定问题条件数，随着内层求解精度变松（$\epsilon_{\mathrm{inner}}$ 增大），最优惩罚参数 $c^*$ 总体向更小方向漂移；若 $c^*$ 随 $\epsilon_{\mathrm{inner}}$ 出现系统性漂移且方向与假设一致，则 H4 成立。
 \item \textbf{H5 成立判定}：固定内层精度，随着原问题条件数 $\kappa(H)$ 增大（问题更病态），最优惩罚参数 $c^*$ 总体向更小方向漂移，且大 $c$ 区域的内层条件恶化效应（如单轮内层迭代数、子问题条件数）增强更显著；若满足上述规律，则 H5 成立。
 \end{enumerate}
+
+\section{实验结果与分析}
+\label{sec:results}
+
+本章基于批量实验结果，依次回答三个核心研究问题，并对研究假设 H1--H5 的成立情况进行检验。所有统计均基于达到外层终止条件的收敛试验，最优惩罚参数 $c^*$ 定义为在收敛试验中平均总内层迭代次数最小的 $c$。
+
+\subsection{实验 1：外层收敛行为与 RQ1}
+\label{sec:res-exp1}
+
+图~\ref{fig:conv} 给出了 $\kappa(H)=100$ 下不同惩罚参数 $c$ 的原始残差收敛轨迹，分别对应典型不精确内层求解（$\epsilon_{\mathrm{inner}}=10^{-4}$）与精确内层求解（$\epsilon_{\mathrm{inner}}=10^{-12}$）。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\textwidth]{figures/fig1_convergence.png}
+\caption{实验 1：不同惩罚参数 $c$ 下 ALM 原始残差收敛轨迹}
+\label{fig:conv}
+\end{figure}
+
+可以看出：
+\begin{itemize}
+\item 在可收敛的 $c$ 范围内，$c$ 越大，原始残差下降越快，外层所需迭代数越少，说明增大 $c$ 总体提升外层收敛速率；
+\item 精确内层求解（右图）下，各 $c$ 的收敛轨迹平滑，未出现结构性震荡；
+\item 不精确内层求解（左图）下，过小的 $c$ 收敛缓慢；较大的 $c$ 原始残差下降更快。需要说明的是，图~\ref{fig:conv} 仅展示原始残差轨迹，平稳性残差是否达到终止容差需结合批量统计判断：部分大 $c$ 组合的平稳性残差未能同步达到 $10^{-6}$，表现为不精确 ALM 的数值平台。
+\end{itemize}
+
+从图~\ref{fig:conv} 还可看到，左右两图的原始残差轨迹形态接近，说明内层精度对原始残差下降轨迹的影响有限；二者的差异主要体现在平稳性残差是否达到终止容差。因此，RQ1 的回答为：惩罚参数 $c$ 主要通过约束惩罚强度影响外层收敛速率；$c$ 越大，原始残差收敛越快，但该结论依赖于内层求解精度。在精确 ALM 下，$c$ 的作用主要体现在收敛速率；在不精确 ALM 下，过大的 $c$ 会因内层误差放大而产生收敛平台（需结合平稳性残差统计判断）。
+
+\subsection{实验 2：计算效率权衡与 RQ2}
+\label{sec:res-exp2}
+
+图~\ref{fig:ustar} 给出 $\kappa(H)=100$、$\epsilon_{\mathrm{inner}}=10^{-4}$ 下平均总内层迭代次数随 $c$ 的变化。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{figures/fig2_ustar.png}
+\caption{实验 2：总内层迭代次数随惩罚参数 $c$ 的变化，呈现 U 型曲线}
+\label{fig:ustar}
+\end{figure}
+
+结果显示：
+\begin{itemize}
+\item 总内层迭代次数随 $c$ 先降后升，呈明显 U 型；
+\item 计算最优惩罚参数约为 $c^*=10$，此时平均总内层迭代次数约 266；
+\item 左侧（小 $c$）成本高由外层收敛过慢主导，右侧（大 $c$）成本上升由子问题条件数恶化、单轮内层迭代增加主导。
+\end{itemize}
+
+因此，RQ2 的回答为：$c$ 对整体计算效率存在非单调影响，计算意义上存在最优惩罚参数 $c^*$，其取值由外层迭代数与内层求解成本的权衡决定。
+
+\subsection{实验 3：最优惩罚参数的依赖规律与 RQ3}
+\label{sec:res-exp3}
+
+图~\ref{fig:eps-compare} 和图~\ref{fig:kappa-compare} 分别给出固定条件数下不同内层精度的 U 型曲线，以及固定内层精度下不同条件数的 U 型曲线。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{figures/fig3_eps_compare.png}
+\caption{实验 3：固定 $\kappa(H)=100$，不同内层精度下的 U 型曲线对比}
+\label{fig:eps-compare}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{figures/fig4_kappa_compare.png}
+\caption{实验 3：固定 $\epsilon_{\mathrm{inner}}=10^{-4}$，不同条件数下的 U 型曲线对比}
+\label{fig:kappa-compare}
+\end{figure}
+
+图~\ref{fig:cstar-heatmap} 给出 $c^*$ 随 $\kappa(H)$ 与 $\epsilon_{\mathrm{inner}}$ 漂移的二维热力图。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{figures/fig6_cstar_heatmap.png}
+\caption{实验 3：$c^*$ 随 $\kappa(H)$ 与 $\epsilon_{\mathrm{inner}}$ 的漂移热力图}
+\label{fig:cstar-heatmap}
+\end{figure}
+
+从图中可以观察到：
+\begin{itemize}
+\item 固定 $\kappa(H)$ 时，$c^*$ 随 $\epsilon_{\mathrm{inner}}$ 增大而明显减小。例如 $\kappa(H)=100$ 时，$\epsilon_{\mathrm{inner}}=10^{-12},10^{-6},10^{-4},10^{-2}$ 对应的 $c^*$ 分别约为 $1000,100,10,1$，支持假设 H4；
+\item 固定 $\epsilon_{\mathrm{inner}}$ 时，$c^*$ 随 $\kappa(H)$ 的变化较弱，且方向为略微增大而非减小。例如 $\epsilon_{\mathrm{inner}}=10^{-2}$ 时，$\kappa(H)=10,100$ 对应 $c^*=1$，而 $\kappa(H)=1000,10000$ 对应 $c^*=10$。这与假设 H5 的预期方向相反，因此 H5 未得到支持；
+\item 对 $4\times3$ 组参数进行幂律拟合得到
+\[
+\log_{10} c^* = -0.83 + 0.23\log_{10}\kappa(H) - 0.37\log_{10}\epsilon_{\mathrm{inner}}, \qquad R^2=0.851.
+\]
+该结果表明 $c^*$ 对内层精度的依赖明显（系数 $-0.37$），对条件数的依赖较弱且为正（系数 $0.23$），不满足原假设中“越病态 $c^*$ 越小”的简单幂律方向。
+\end{itemize}
+
+为了解释 H5 未支持的原因，图~\ref{fig:hc-condition} 给出了子问题条件数 $\kappa(H_c)$ 随惩罚参数 $c$ 的变化，并标注了各参数组合的计算最优 $c^*$。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/fig7_hc_condition.png}
+\caption{子问题条件数 $\kappa(H_c)$ 随 $c$ 的变化及计算最优 $c^*$ 位置}
+\label{fig:hc-condition}
+\end{figure}
+
+可以看出，$\kappa(H_c)$ 并非仅由 $\kappa(H)$ 决定，而是同时取决于 $c$、$A^\top A$ 以及二者谱结构的相互作用。例如，在 $\epsilon_{\mathrm{inner}}=10^{-2}$ 时，$\kappa(H)=10,100,1000,10000$ 对应的最优 $c^*$ 处 $\kappa(H_{c^*})$ 分别约为 $1.7\times10^2,1.7\times10^2,1.4\times10^3,5.3\times10^3$，并未随 $\kappa(H)$ 等比例恶化。此外，图~\ref{fig:hc-condition} 还显示，当 $c$ 较大时，不同 $\kappa(H)$ 对应的 $\kappa(H_c)$ 曲线会发生交叉，原始条件数较小的问题在大 $c$ 下反而可能具有更大的子问题条件数，进一步说明 $\kappa(H)$ 不能单独预测子问题求解难度。这表明 H5 的原始推理“$\kappa(H)$ 越大，大 $c$ 越不划算”过于简化；真正决定内层求解难度的量是增广后子问题的条件数 $\kappa(H_c)$，而不是原问题条件数 $\kappa(H)$。
+
+因此，RQ3 的回答为：最优惩罚参数 $c^*$ 确实依赖于内层求解精度与问题条件数，即 $c^*=c^*(\kappa(H),\epsilon_{\mathrm{inner}})$；其中对 $\epsilon_{\mathrm{inner}}$ 的依赖显著且方向稳定，对 $\kappa(H)$ 的依赖较弱，且实验方向与初始假设 H5 相反。
+
+\subsection{内层迭代成本与子问题条件数的关系}
+\label{sec:res-cond}
+
+图~\ref{fig:cond-corr} 给出平均单轮内层迭代次数与子问题条件数 $\kappa(H_c)$ 的双对数散点图，并按内层精度分组拟合。
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{figures/fig5_cond_corr.png}
+\caption{内层迭代步数与子问题条件数的相关性（按内层精度分组拟合）}
+\label{fig:cond-corr}
+\end{figure}
+
+结果显示：
+\begin{itemize}
+\item 在双对数坐标下，各组数据近似呈线性上升，支持内层迭代步数与 $\kappa(H_c)$ 之间存在幂律关系；
+\item 四组拟合斜率均在 $0.13\sim0.15$ 之间，说明内层迭代步数对条件数的依赖较弱，与 CG 理论中 $\sqrt{\kappa}$ 的粗略上界相比，实际依赖更温和；
+\item 内层精度越高（$\epsilon_{\mathrm{inner}}$ 越小），相同条件数下的迭代步数越多，曲线整体上移。
+\end{itemize}
+
+\subsection{研究假设检验总结}
+\label{sec:res-summary}
+
+综合上述结果，各研究假设的检验结论如下：
+
+\begin{itemize}
+\item \textbf{H1（支持）}：$c$ 增大总体提升外层收敛速率，同时增大单轮内层求解成本，二者形成权衡关系；
+\item \textbf{H2（支持）}：不精确 ALM 场景下总计算代价随 $c$ 呈 U 型，存在内部最优 $c^*$；
+\item \textbf{H3（部分支持）}：精确 ALM 场景下收敛平稳、无显著震荡；不精确 ALM 场景下大 $c$ 区域出现收敛平台/平稳性残差难以进一步下降。但“震荡”现象在本实验参数范围内并不普遍，因此只能说部分支持；
+\item \textbf{H4（支持）}：内层精度越松，最优 $c^*$ 越小；
+\item \textbf{H5（不支持，需修正）}：最优 $c^*$ 随 $\kappa(H)$ 增大并未如预期减小，反而略有增大。更准确的认识是：$c^*$ 不由 $\kappa(H)$ 单独决定，而由增广子问题条件数 $\kappa(H_c)$ 与外层收敛收益共同决定；$\kappa(H)$ 本身不是充分的参数选择指标。
+\end{itemize}
+
+\section{理论机制分析}
+\label{sec:mechanism}
+
+本节将实验结果与 ALM/CG 的理论性质联系起来，给出惩罚参数 $c$ 影响总计算代价的完整数学链条，并解释 H4、H5 的深层原因。
+
+\subsection{外层加速：乘子误差传播}
+\label{sec:mech-outer}
+
+考虑精确 ALM 情形。设 $M_c=H+cA^\top A$，子问题精确解为 $x_{k+1}=M_c^{-1}(q-A^\top\lambda_k+cA^\top b)$。由 KKT 条件，最优乘子满足 $q=Hx^*+A^\top\lambda^*$ 和 $Ax^*=b$。记乘子误差 $e_{\lambda,k}=\lambda_k-\lambda^*$，经整理可得
+\begin{equation}
+\label{eq:multiplier-error}
+e_{\lambda,k+1}=(I+cS)^{-1}e_{\lambda,k}, \qquad S=AH^{-1}A^\top\succ0.
+\end{equation}
+设 $S$ 的特征值为 $\mu_i>0$，则对应方向的收缩因子为
+\begin{equation}
+\label{eq:contraction}
+\rho_i(c)=\frac{1}{1+c\mu_i}.
+\end{equation}
+因此 $c$ 越大，$\rho_i(c)$ 越小，外层乘子误差收敛越快。这解释了实验 1 中“$c$ 增大使原始残差下降更快”的现象。
+
+\subsection{内层代价：CG 与子问题谱}
+\label{sec:mech-inner}
+
+内层用 CG 求解 $M_cx=rhs$。经典 CG 误差界给出达到精度 $\epsilon_{\mathrm{inner}}$ 所需迭代步数约为
+\begin{equation}
+\label{eq:mech-cg}
+N_{\mathrm{CG}}\sim O\left(\sqrt{\kappa(M_c)}\,\log\frac1{\epsilon_{\mathrm{inner}}}\right).
+\end{equation}
+因此 $c$ 通过改变 $M_c=H+cA^\top A$ 的谱结构影响单轮内层成本。值得注意的是，由于 $A^\top A\succeq0$，$\lambda_{\max}(M_c)$ 与 $\lambda_{\min}(M_c)$ 都随 $c$ 单调不减，但 $\kappa(M_c)$ 是否上升取决于二者增长速率的相对大小；在本实验的大 $c$ 区域，$\kappa(M_c)$ 整体上升，导致 CG 成本增加。
+
+\subsection{不精确 ALM 的平稳性误差地板}
+\label{sec:mech-inexact}
+
+若 CG 未精确求解，则存在内层残差 $\delta_k$ 使得
+\begin{equation}
+\label{eq:inner-residual}
+M_cx_{k+1}=q-A^\top\lambda_k+cA^\top b+\delta_k.
+\end{equation}
+将乘子更新代入平稳性残差 $s_{k+1}=Hx_{k+1}-q+A^\top\lambda_{k+1}$，可得
+\begin{equation}
+\label{eq:stationarity-floor}
+s_{k+1}=\delta_k.
+\end{equation}
+因此 $\|s_{k+1}\|=\|\delta_k\|$。当 CG 采用相对残差终止 $\|\delta_k\|\le\epsilon_{\mathrm{inner}}\|rhs_k\|$ 时，
+\begin{equation}
+\label{eq:error-floor}
+\|s_{k+1}\|\lesssim\epsilon_{\mathrm{inner}}\|rhs_k\|.
+\end{equation}
+这意味着固定内层精度直接形成外层平稳性残差的误差地板：若 $\epsilon_{\mathrm{inner}}=10^{-4}$ 而外层要求 $\|s_k\|\le10^{-6}$，则无法保证达标。这从数学上解释了“除精确 ALM 外大量参数不满足终止条件”的初始现象\scite{fernandez2012}。
+
+此外，不精确误差还会通过乘子更新进入外层迭代。设 $x_{k+1}=x_{k+1}^{\mathrm{exact}}+e_k$，$e_k=M_c^{-1}\delta_k$，则乘子更新中的扰动为 $cAM_c^{-1}\delta_k$。于是不精确 ALM 的乘子误差传播为
+\begin{equation}
+\label{eq:inexact-multiplier}
+e_{\lambda,k+1}=(I+cS)^{-1}e_{\lambda,k}+cAM_c^{-1}\delta_k.
+\end{equation}
+前一项随 $c$ 增大而收缩（有利），后一项随 $c$ 增大而放大内层误差（不利）。这解释了大 $c$ 下不精确 ALM 更容易出现收敛平台的现象。
+
+\subsection{总成本与 $c^*$ 的决定}
+\label{sec:mech-ustar}
+
+综合上述机制，总计算代价可近似表示为
+\begin{equation}
+\label{eq:total-cost}
+C(c,\epsilon_{\mathrm{inner}})\approx N_{\mathrm{outer}}(c,\epsilon_{\mathrm{inner}})\cdot N_{\mathrm{CG}}(c,\epsilon_{\mathrm{inner}}),
+\end{equation}
+其中 $N_{\mathrm{outer}}$ 随 $c$ 增大而下降（来自收缩因子 $\rho(c)$），$N_{\mathrm{CG}}$ 随 $c$ 增大而上升（来自 $\kappa(M_c)$ 增大），二者竞争产生 U 型曲线与内部最优 $c^*$。
+
+进一步，当 $\epsilon_{\mathrm{inner}}$ 减小时，$N_{\mathrm{CG}}$ 整体增大，减少一次外层迭代的边际收益变高，因此最优 $c^*$ 向右移动。这解释了 H4。
+
+\subsection{H5 的深层原因：谱方向相互作用}
+\label{sec:mech-h5}
+
+H5 的原始假设 $\kappa(H)\uparrow\Rightarrow c^*\downarrow$ 隐含了“$\kappa(H)$ 能决定子问题难度”的假设。但外层收敛真正涉及 $S=AH^{-1}A^\top$，内层真正涉及 $H+cA^\top A$，二者都依赖于 $H$ 的特征向量方向与 $A$ 的约束方向之间的相对位置。设 $H=Q\Lambda Q^\top$，则
+\begin{equation}
+AH^{-1}A^\top=AQ\Lambda^{-1}Q^\top A^\top,
+\end{equation}
+其中 $AQ$ 明确刻画了这一相对位置；同理，$H+cA^\top A$ 的特征值并不是简单的 $\lambda_i(H)+c\lambda_i(A^\top A)$，除非 $H$ 与 $A^\top A$ 可同时对角化。因此，仅控制 $\kappa(H)$ 无法确定 $\kappa(H_c)$ 与外层收缩收益，H5 的因果链条少了一层。修正后的认识是：
+\[
+c^* \text{ 由 } \kappa(H_c) \text{（受 } H,\,A^\top A,\,c \text{ 谱结构共同决定）与外层收敛收益（受 } AH^{-1}A^\top \text{ 决定）共同决定。}
+\]
+这也解释了实验中不同 $\kappa(H)$ 的 $\kappa(H_c)$ 曲线发生交叉的现象。
+
+\section{讨论与结论}
+\label{sec:discussion}
+
+本文围绕增广拉格朗日方法中的惩罚参数 $c$，通过“KKT reference + ALM + CG”的可复现实验体系，系统研究了 $c$ 对外层收敛行为、整体计算效率以及最优参数选择的影响。主要发现如下：
+
+\begin{enumerate}
+\item \textbf{外层收敛与内层成本存在 U 型权衡}：$c$ 增大加快原始残差收敛，但同时提高子问题条件数 $\kappa(H_c)$ 与单轮内层求解成本，因此总计算代价随 $c$ 呈 U 型，存在计算最优 $c^*$。
+\item \textbf{内层精度改变成本权衡的相对重要性}：$\epsilon_{\mathrm{inner}}$ 越严，单次内层求解越昂贵，减少外层迭代的边际收益越大，导致 $c^*$ 向较大区域移动。这为 H4 提供了机制层面的解释，而不仅是现象描述。
+\item \textbf{$\kappa(H)$ 不是预测 $c^*$ 的充分指标}：实验表明 $c^*$ 随 $\kappa(H)$ 增大略微增大，与 H5 的初始预期相反。进一步分析显示，真正决定内层求解难度的量是增广子问题条件数 $\kappa(H_c)$，而 $\kappa(H_c)$ 同时受 $c$、$A^\top A$ 以及二者谱结构相互作用的影响。因此，H5 应修正为：$c^*$ 由增广后子问题的谱性质与外层收敛收益共同决定。
+\end{enumerate}
+
+本文的结论可以概括为：惩罚参数 $c$ 并不是一个可以脱离问题结构而固定的 ALM 常数；其最优取值依赖于内层求解精度以及增广后子问题的实际数值条件。这一认识对于实际使用 ALM 时进行参数自适应具有直接指导意义。
+
+本研究的局限性包括：参数网格较粗（$c$ 按数量级扫描），$c^*$ 的精确位置可能位于网格之间；实验仅覆盖对称正定二次规划基准问题；自适应 $c$ 策略（实验 4）尚未纳入本文结果。后续工作可以在 $c^*$ 附近加密网格，并进一步验证自适应策略在问题特性未知时的表现。
+
+\begin{thebibliography}{9}
+
+\bibitem{bertsekas1982}
+D.~P. Bertsekas.
+\emph{Constrained Optimization and Lagrange Multiplier Methods}.
+Academic Press, 1982.
+
+\bibitem{hestenes1952}
+M.~R. Hestenes and E.~Stiefel.
+Methods of conjugate gradients for solving linear systems.
+\emph{Journal of Research of the National Bureau of Standards}, 49(6):409--436, 1952.
+
+\bibitem{fernandez2012}
+D.~Fern\'andez and M.~V.~Solodov.
+Local convergence of exact and inexact augmented Lagrangian methods under the second-order sufficient optimality condition.
+\emph{SIAM Journal on Optimization}, 22(2):384--407, 2012.
+
+\end{thebibliography}
 
 \end{document}
